@@ -10,10 +10,12 @@ QML_FILES := ui/Service.qml ui/BarWidget.qml ui/App.qml ui/compose/RecoveryContr
 	ui/providers/ImapAuth.qml ui/providers/ImapClient.qml \
 	ui/providers/HeyAuth.qml ui/providers/HeyClient.qml \
 	ui/providers/JmapAuth.qml ui/providers/JmapClient.qml ui/providers/JmapPush.qml \
+	ui/providers/LnemailAuth.qml ui/providers/LnemailClient.qml \
 	ui/components/ImapSetupPage.qml \
 	ui/components/OutlookSetupPage.qml \
 	ui/components/JmapSetupPage.qml \
 	ui/components/HeySetupPage.qml \
+	ui/components/LnemailSetupPage.qml \
 	ui/components/ProviderPicker.qml \
 	ui/components/GmailIcon.qml \
 	ui/components/ProviderLogo.qml \

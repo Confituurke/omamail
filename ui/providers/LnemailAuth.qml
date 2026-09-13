@@ -273,9 +273,20 @@ Item {
     })
   }
 
+  // A brand new mailbox has no id yet: LNemail names the address, and
+  // `MailAccount` assigns it here only after a profile read reports it back.
+  // Writing the token immediately would write it under a name-less key that
+  // any other LNemail mailbox could then find — the same bug Gmail's own
+  // manager fixed by waiting, so this waits the same way.
+  property string unnamedToken: ""
+
   function storeToken() {
+    if (accountId === "") {
+      unnamedToken = token
+      return
+    }
     var attributes = Credentials.lnemailKeyringAttributes(accountId)
-    if (attributes.length === 0 || token === "") return
+    if (token === "") return
     keyringWriteSecret = token
     keyringStore.command = [pluginDir + "/scripts/keyring-store.sh"].concat(attributes)
     keyringStore.running = true
@@ -310,13 +321,26 @@ Item {
     cancelAccountCreation()
   }
 
+  // A new mailbox has no id yet — LNemail names the address, not the user —
+  // so `MailAccount` learns it from a profile read and assigns it here after
+  // the fact, the same way Gmail's own address is learned rather than typed.
+  // That first assignment must not clear the token this object just signed
+  // in with and is about to store under the very key it names; only an id
+  // that names an *actual other* mailbox does.
+  property string previousAccountId: ""
   onAccountIdChanged: {
-    // A different mailbox has a different token. Dropping the one in memory
-    // is what stops an account rename from leaving the previous account's
-    // credential in front of the new one's server.
-    token = ""
-    tokenChecked = false
-    lookupHandled = false
+    if (previousAccountId !== "" && previousAccountId !== accountId) {
+      token = ""
+      tokenChecked = false
+      lookupHandled = false
+    }
+    previousAccountId = accountId
+    if (accountId !== "" && unnamedToken !== "") {
+      var held = unnamedToken
+      unnamedToken = ""
+      token = held
+      storeToken()
+    }
   }
 
   Component.onCompleted: {

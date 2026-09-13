@@ -10,19 +10,23 @@ for (const method of ["query", "cachedSummaryInSearch", "labelQuery", "addressQu
 
 // ------------------------------------------------------------- the registry
 //
-// Four providers, and the ids are what an accounts.json holds — renaming one
+// Six providers, and the ids are what an accounts.json holds — renaming one
 // silently orphans every account already written with the old name.
 //
-// The order is the order the chooser lists them in: the three hosted mailboxes
-// with a service of their own, then the two that are every other mailbox, IMAP
-// first because it is the one nearly every server speaks.
-deepEqual(provider.ids(), ["gmail", "hey", "outlook", "imap", "jmap"])
+// The order is the order the chooser lists them in: Gmail, HEY and Outlook,
+// the three hosted mailboxes with a service of their own, then IMAP and JMAP,
+// the two that are every other mailbox, and LNemail last of all because it
+// names one specific service rather than a protocol anything else could
+// also speak.
+deepEqual(provider.ids(), ["gmail", "hey", "outlook", "imap", "jmap", "lnemail"])
 assert.strictEqual(provider.get("gmail").name, "Gmail")
 assert.strictEqual(provider.get("outlook").name, "Outlook")
 assert.strictEqual(provider.get("imap").name, "IMAP")
 assert.strictEqual(provider.get("hey").name, "HEY")
 assert.strictEqual(provider.get("jmap").name, "JMAP")
+assert.strictEqual(provider.get("lnemail").name, "LNemail")
 assert.strictEqual(provider.exists("jmap"), true)
+assert.strictEqual(provider.exists("lnemail"), true)
 
 // An id from a newer build, or a hand-edited file, still has to open a window.
 assert.strictEqual(provider.get("nonesuch").id, "gmail")
@@ -44,6 +48,15 @@ assert.strictEqual(provider.can("outlook", "labels"), false)
 assert.strictEqual(provider.can("gmail", "manageLabels"), true)
 assert.strictEqual(provider.can("imap", "manageLabels"), true)
 assert.strictEqual(provider.can("hey", "manageLabels"), false, "HEY's labels are HEY's own")
+
+// LNemail is a flat inbox with no folders, threads or search of its own, and
+// no separate endpoint to fetch an attachment from beyond the message that
+// already carries it — send and a bulk delete are the whole of what it has.
+for (const capability of ["labels", "move", "threads", "conversations", "archive",
+  "spam", "star", "web", "webBox", "search", "manageLabels"])
+  assert.strictEqual(provider.can("lnemail", capability), false, "lnemail/" + capability)
+assert.strictEqual(provider.can("lnemail", "send"), true)
+assert.strictEqual(provider.can("lnemail", "batch"), true)
 
 // Mail from or to an address, in each provider's own words.
 assert.strictEqual(provider.addressQuery("gmail", "from", "ada@example.com"), "from:ada@example.com")
@@ -371,6 +384,7 @@ assert.strictEqual(provider.webHomeUrl("gmail"), "https://mail.google.com/mail/u
 assert.strictEqual(provider.webHomeUrl("hey"), "https://app.hey.com")
 assert.strictEqual(provider.webHomeUrl("imap"), "", "an IMAP server is not a website")
 assert.strictEqual(provider.webHomeUrl("outlook"), "https://outlook.live.com/mail/")
+assert.strictEqual(provider.webHomeUrl("lnemail"), "https://lnemail.net")
 
 // ------------------------------------------------------------------ logos
 
@@ -388,12 +402,20 @@ assert.strictEqual(provider.mark("imap"), "")
 assert.strictEqual(provider.logo("imap"), "")
 assert.strictEqual(provider.mark("outlook"), "outlook.svg")
 assert.strictEqual(provider.logo("outlook"), "outlook.svg", "one square mark serves both")
+// LNemail is a protocol this plugin speaks natively too, not a brand with
+// artwork of its own to show.
+assert.strictEqual(provider.mark("lnemail"), "")
+assert.strictEqual(provider.logo("lnemail"), "")
 
 // ------------------------------------------------------------------- auth
 
 assert.strictEqual(provider.authKind("gmail"), "oauth")
 assert.strictEqual(provider.authKind("outlook"), "oauth")
 assert.strictEqual(provider.authKind("imap"), "password")
+// A pasted access token, or one a signup invoice just paid for — either way
+// the same "password" shape MailAccount already knows how to drive.
+assert.strictEqual(provider.authKind("lnemail"), "password")
+assert.strictEqual(provider.usesPassword("lnemail"), true)
 // A sign-in this plugin does not perform itself: `hey` owns the browser, the
 // token and the keyring entry it lives in.
 assert.strictEqual(provider.authKind("hey"), "cli")
@@ -409,7 +431,9 @@ assert.strictEqual(provider.usesPassword("gmail"), false)
 
 assert.strictEqual(provider.badge("imap"), "IMAP")
 assert.strictEqual(provider.badge("jmap"), "JMAP", "the switcher badge is the protocol, no host")
+assert.strictEqual(provider.badge("lnemail"), "LNemail")
 assert.ok(provider.summary("imap").length > 0)
+assert.ok(provider.summary("lnemail").length > 0)
 
 // One more line about a particular mailbox, for the row that lists them. Only
 // the provider with something to add answers, and it answers from the account

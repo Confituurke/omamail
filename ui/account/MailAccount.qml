@@ -2598,7 +2598,8 @@ Item {
     sourceComponent: root.providerId === "imap" ? imapAuthComponent
       : (root.providerId === "jmap" ? jmapAuthComponent
       : (root.providerId === "outlook" ? outlookAuthComponent
-        : (root.providerId === "hey" ? heyAuthComponent : gmailAuthComponent)))
+        : (root.providerId === "hey" ? heyAuthComponent
+          : (root.providerId === "lnemail" ? lnemailAuthComponent : gmailAuthComponent))))
   }
 
   // The client takes the manager as a required property, so it cannot be built
@@ -2613,7 +2614,8 @@ Item {
       : (root.providerId === "imap" || root.providerId === "outlook"
         ? imapClientComponent
         : (root.providerId === "jmap" ? jmapClientComponent
-          : (root.providerId === "hey" ? heyClientComponent : gmailClientComponent)))
+          : (root.providerId === "hey" ? heyClientComponent
+            : (root.providerId === "lnemail" ? lnemailClientComponent : gmailClientComponent))))
   }
 
   Component {
@@ -2711,6 +2713,24 @@ Item {
   }
 
   Component {
+    id: lnemailAuthComponent
+
+    LnemailAuth {
+      backend: root.backend
+      pluginDir: root.pluginDir
+      accountId: root.accountId
+
+      onLoginSucceeded: {
+        root.lastError = lastError
+        root.afterSignIn()
+      }
+      onLoggedOut: root.clearNotice()
+      onCredentialsSaved: root.note("Mailbox saved")
+      onSessionUnavailable: function(reason) { root.fail(reason) }
+    }
+  }
+
+  Component {
     id: outlookAuthComponent
 
     OutlookAuth {
@@ -2740,6 +2760,11 @@ Item {
   Component {
     id: heyClientComponent
     HeyClient { auth: authLoader.item; backend: root.backend }
+  }
+
+  Component {
+    id: lnemailClientComponent
+    LnemailClient { auth: authLoader.item; backend: root.backend }
   }
 
   Component {

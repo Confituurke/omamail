@@ -1278,6 +1278,21 @@ Item {
     }
   }
 
+  Component {
+    id: lnemailSetupPage
+
+    LnemailSetupPage {
+      service: root.service
+      textColor: root.foreground
+      dimColor: root.dim
+      dangerColor: root.danger
+      accentColor: root.accent
+      panelFontFamily: root.fontFamily
+      accountCount: root.service ? root.service.accountCount : 1
+      onRemoveRequested: root.removeCurrentAccountFromEditor()
+    }
+  }
+
   // Every mailbox at once. The rail it lands on has to be one they all have,
   // so a row only some of them offered — Gmail's own Archive beside an IMAP
   // mailbox — does not leave the list asking for something nothing can serve.
@@ -2308,7 +2323,8 @@ Item {
               : (setup.kind === "imap" ? imapSetupPage
                 : (setup.kind === "jmap" ? jmapSetupPage
                 : (setup.kind === "outlook" ? outlookSetupPage
-                  : (setup.kind === "hey" ? heySetupPage : gmailSetupPage))))
+                  : (setup.kind === "hey" ? heySetupPage
+                    : (setup.kind === "lnemail" ? lnemailSetupPage : gmailSetupPage)))))
           }
           }
         }
