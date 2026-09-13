@@ -1773,7 +1773,6 @@ Item {
           // — because its expiry is worth a standing glance, not something
           // to notice only once it has already lapsed.
           IconButton {
-            id: lnemailRenewalButton
             objectName: "lnemail-renewal-button"
             anchors.verticalCenter: parent.verticalCenter
             visible: !root.showPage && !root.composing && !root.calendarVisible && root.hasLnemailInView

@@ -100,11 +100,22 @@ fn explicit_token(p: &Value) -> Result<Option<&str>, &'static str> {
 }
 
 async fn token(p: &Value) -> Result<String, &'static str> {
+    let account = p.get("accountId").and_then(Value::as_str).ok_or("invalid_params")?;
+    crate::auth::password("lnemail", account).await
+}
+
+/// The bearer for `GET /account`, the one call that may run before an
+/// account is registered: a token just pasted or paid for, or — once
+/// registered — the keyring's own. Deliberately its own function rather
+/// than a branch inside `token`: only this call site ever reaches
+/// `explicit_token`, so a caller-supplied token can authorize nothing but
+/// asking LNemail whose it is, by construction rather than by every other
+/// match arm's allowlist happening to leave "token" out.
+async fn account_token(p: &Value) -> Result<String, &'static str> {
     if let Some(explicit) = explicit_token(p)? {
         return Ok(explicit.to_owned());
     }
-    let account = p.get("accountId").and_then(Value::as_str).ok_or("invalid_params")?;
-    crate::auth::password("lnemail", account).await
+    token(p).await
 }
 
 pub async fn call(method: &str, p: &Value) -> Result<Value, &'static str> {
@@ -131,7 +142,7 @@ pub async fn call(method: &str, p: &Value) -> Result<Value, &'static str> {
         }
         "lnemail.account" => {
             allowed(p, &["accountId", "token"])?;
-            let bearer = token(p).await?;
+            let bearer = account_token(p).await?;
             http::get(&["account"], &bearer).await
         }
         "lnemail.list" => {

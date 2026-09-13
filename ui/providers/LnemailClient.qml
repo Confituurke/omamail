@@ -114,8 +114,15 @@ Item {
     var results = []
     var pending = list.length
     var failure = ""
+    // The cached branch below decrements every item synchronously, in the
+    // same tick, before any of its deferred `settle` calls run — so by the
+    // time the first one fires, `pending` already reads zero for all of
+    // them. `settled` is what keeps that from calling back once per id
+    // instead of once for the whole batch.
+    var settled = false
     function settle() {
-      if (pending > 0 || handle.aborted) return
+      if (settled || pending > 0 || handle.aborted) return
+      settled = true
       if (typeof callback === "function") callback(results, failure)
     }
     for (var i = 0; i < list.length; i++) {

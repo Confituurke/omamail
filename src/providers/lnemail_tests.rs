@@ -48,11 +48,25 @@ fn optional_turns_an_absent_value_into_json_null_never_an_empty_string() {
 async fn an_explicit_token_is_used_directly_and_never_needs_an_account() {
     // Verifying a pasted token, or one a signup invoice just paid for, happens
     // before the account is registered — so this must not touch the keyring.
-    assert_eq!(token(&json!({"token": "sekret"})).await.unwrap(), "sekret");
-    assert_eq!(token(&json!({})).await, Err("invalid_params"));
+    // `account_token` is the only function that ever reaches this path.
+    assert_eq!(account_token(&json!({"token": "sekret"})).await.unwrap(), "sekret");
+    assert_eq!(account_token(&json!({})).await, Err("invalid_params"));
     for bad in ["", "a\nb", "a\0b"] {
-        assert_eq!(token(&json!({"token": bad})).await, Err("invalid_params"));
+        assert_eq!(account_token(&json!({"token": bad})).await, Err("invalid_params"));
     }
+}
+
+#[tokio::test]
+async fn only_account_token_can_ever_reach_an_explicit_token() {
+    // `token` — the bearer resolver every other authenticated method uses —
+    // must refuse an explicit token outright rather than accept one nobody
+    // asked it to. An accountId-shaped string is enough to prove this: were
+    // "token" honoured here, this would resolve to "sekret" instead of
+    // failing on the missing account lookup.
+    assert_eq!(
+        token(&json!({"token": "sekret", "accountId": "not-an-account"})).await,
+        Err("auth_account_invalid")
+    );
 }
 
 #[tokio::test]
