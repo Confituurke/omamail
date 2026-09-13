@@ -428,6 +428,8 @@ impl QueryCache {
                 "jmap"
             } else if account.starts_with("hey:") {
                 "hey"
+            } else if account.starts_with("lnemail:") {
+                "lnemail"
             } else {
                 "gmail"
             };

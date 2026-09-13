@@ -120,6 +120,8 @@ fn inbox(account: &str) -> &'static str {
         "imap"
     } else if account.starts_with("outlook:") {
         "outlook"
+    } else if account.starts_with("lnemail:") {
+        "lnemail"
     } else {
         "gmail"
     };
@@ -153,6 +155,8 @@ impl Provider {
                 crate::providers::hey::call(method, &checked).await
             } else if account.starts_with("imap:") || account.starts_with("outlook:") {
                 crate::providers::imap::call(method, &params).await
+            } else if account.starts_with("lnemail:") {
+                crate::providers::lnemail::call(method, &params).await
             } else {
                 self.gmail.call(method, &params).await
             }
@@ -184,6 +188,11 @@ impl Provider {
                 return Err("preload_incomplete");
             }
             Ok(result["page"].clone())
+        } else if account.starts_with("lnemail:") {
+            // A flat inbox with no query language of its own: `GET /emails`
+            // always answers with the whole thing.
+            self.request(account, "lnemail.list", json!({"accountId":account}), live)
+                .await
         } else {
             self.request(
                 account,
@@ -231,6 +240,14 @@ impl Provider {
                 .and_then(|m| m.first())
                 .cloned()
                 .ok_or("preload_message_missing")
+        } else if account.starts_with("lnemail:") {
+            self.request(
+                account,
+                "lnemail.read",
+                json!({"accountId":account,"id":id}),
+                live,
+            )
+            .await
         } else {
             self.request(
                 account,

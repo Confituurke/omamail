@@ -259,7 +259,7 @@ fn validate_ids(provider: &str, ids: &[String]) -> Result<()> {
                     && a.bytes().all(|b| b.is_ascii_digit())
                     && b.bytes().all(|b| b.is_ascii_digit())
             }),
-            "gmail" => id
+            "gmail" | "lnemail" => id
                 .bytes()
                 .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'),
             "jmap" => id.len() <= 1024,

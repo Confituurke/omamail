@@ -181,6 +181,18 @@ impl Sync {
                     })).await?;
                     return crate::providers::hey::call("hey.list", &params).await;
                 }
+                if account.starts_with("lnemail:") {
+                    // Already full resources, one call: unlike Gmail's list
+                    // this needs no follow-up read per id for a summary.
+                    let listing =
+                        crate::providers::lnemail::call("lnemail.list", &json!({"accountId":account}))
+                            .await?;
+                    let messages = listing["messages"]
+                        .as_array()
+                        .cloned()
+                        .unwrap_or_default();
+                    return Ok(json!({"estimate":listing["estimate"],"messages":messages}));
+                }
                 let (estimate, ids) = count_listed(|token| {
                     let gmail = gmail.clone();
                     let account = account.clone();
