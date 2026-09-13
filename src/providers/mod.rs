@@ -13,6 +13,8 @@ pub mod hey_access;
 pub mod hey_actions;
 pub mod imap;
 pub mod jmap;
+pub mod lnemail;
+pub mod lnemail_http;
 
 const CAPABILITIES: &[&str] = &[
     "labels",
@@ -115,6 +117,15 @@ const PROVIDERS: &[Provider] = &[
         auth: "password",
         capabilities: IMAP_CAPABILITIES,
     },
+    Provider {
+        id: "lnemail",
+        name: "LNemail",
+        summary: "A disposable mailbox paid for and read over the Lightning Network.",
+        auth: "password",
+        // A flat inbox with no folders, threads or search of its own: no
+        // move, archive, spam, star or labels to promise, native or not.
+        capabilities: &["batch", "send"],
+    },
 ];
 
 /// Provider discovery in the same chooser order as the desktop.
@@ -203,7 +214,7 @@ mod tests {
                 .iter()
                 .map(|p| p["id"].as_str().unwrap())
                 .collect::<Vec<_>>(),
-            ["gmail", "outlook", "hey", "jmap", "imap"]
+            ["gmail", "outlook", "hey", "jmap", "imap", "lnemail"]
         );
         for provider in providers {
             assert_eq!(

@@ -176,6 +176,18 @@ pub const ALL: &[&str] = &[
     "jmap.stream.open",
     "jmap.stream.poll",
     "jmap.stream.close",
+    "lnemail.createAccount",
+    "lnemail.signupInvoice",
+    "lnemail.paymentStatus",
+    "lnemail.account",
+    "lnemail.list",
+    "lnemail.read",
+    "lnemail.delete",
+    "lnemail.deleteMany",
+    "lnemail.recentSends",
+    "lnemail.send",
+    "lnemail.sendStatus",
+    "lnemail.sendInvoice",
 ];
 
 pub fn available() -> Vec<&'static str> {

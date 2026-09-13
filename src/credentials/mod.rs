@@ -27,6 +27,7 @@ pub enum CredentialKind {
     OutlookRefreshToken { client_id: String },
     ImapPassword,
     JmapSecret,
+    LnemailToken,
     CalendarPassword,
 }
 
@@ -153,6 +154,7 @@ impl CredentialKey {
             CredentialKind::OutlookRefreshToken { .. } => ("outlook", "outlook-refresh-token"),
             CredentialKind::ImapPassword => ("imap", "imap-password"),
             CredentialKind::JmapSecret => ("jmap", "jmap-secret"),
+            CredentialKind::LnemailToken => ("lnemail", "lnemail-token"),
             CredentialKind::CalendarPassword => ("caldav", "calendar-password"),
         };
         if self.provider != provider {

@@ -209,6 +209,9 @@ impl Session {
         if method.starts_with("imap.") || method == "smtp.send" {
             return Box::pin(crate::providers::imap::call(method, params)).await;
         }
+        if method.starts_with("lnemail.") {
+            return Box::pin(crate::providers::lnemail::call(method, params)).await;
+        }
         if method == "outlook.graphSend" {
             return Box::pin(self.auth.call(method, params)).await;
         }
@@ -427,7 +430,7 @@ pub fn dispatch(method: &str, params: &Value) -> Result<Value, &'static str> {
     match method {
         "system.info" => Ok(json!({
             "name": "omamail", "version": env!("CARGO_PKG_VERSION"),
-            "protocol": 1, "apiVersion": 4, "methods": methods::available(),
+            "protocol": 1, "apiVersion": 5, "methods": methods::available(),
             "capabilities": {"agent": cfg!(all(feature = "agent", target_os = "linux"))}
         })),
         "system.quit" => Ok(json!({"quitReady": true})),

@@ -89,7 +89,7 @@ pub fn snapshot() -> Value {
     let mut out = json!({});
     for p in super::list().as_array().unwrap() {
         let id = p["id"].as_str().unwrap();
-        out[id] = json!({"capabilities":p["capabilities"],"queries":QUERIES[id],"nativeSync":true,"inheritedDefault":"in:inbox","addressSearch":matches!(id,"gmail"|"hey"|"imap"),"webHomeUrl":match id {"gmail"=>"https://mail.google.com/mail/u/0/","hey"=>"https://app.hey.com","outlook"=>"https://outlook.live.com/mail/",_=>""}});
+        out[id] = json!({"capabilities":p["capabilities"],"queries":QUERIES[id],"nativeSync":true,"inheritedDefault":"in:inbox","addressSearch":matches!(id,"gmail"|"hey"|"imap"),"webHomeUrl":match id {"gmail"=>"https://mail.google.com/mail/u/0/","hey"=>"https://app.hey.com","outlook"=>"https://outlook.live.com/mail/","lnemail"=>"https://lnemail.net",_=>""}});
     }
     out
 }
@@ -187,7 +187,7 @@ mod tests {
     use super::*;
     #[test]
     fn control_bytes_are_rejected_before_any_query_or_url_is_returned() {
-        for id in ["gmail", "outlook", "hey", "jmap", "imap"] {
+        for id in ["gmail", "outlook", "hey", "jmap", "imap", "lnemail"] {
             for suffix in ["\r", "\n", "\r\n", "\0", "\t", "\u{7f}"] {
                 for operation in ["labelQuery", "addressQuery", "webMessageUrl", "webBoxUrl"] {
                     assert_eq!(

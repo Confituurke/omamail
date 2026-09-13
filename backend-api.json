@@ -1,5 +1,5 @@
 {
-  "apiVersion": 4,
+  "apiVersion": 5,
   "releasedApiVersion": 4,
   "protocolVersion": 1,
   "methods": [
@@ -178,7 +178,19 @@
     "jmap.request",
     "jmap.stream.open",
     "jmap.stream.poll",
-    "jmap.stream.close"
+    "jmap.stream.close",
+    "lnemail.createAccount",
+    "lnemail.signupInvoice",
+    "lnemail.paymentStatus",
+    "lnemail.account",
+    "lnemail.list",
+    "lnemail.read",
+    "lnemail.delete",
+    "lnemail.deleteMany",
+    "lnemail.recentSends",
+    "lnemail.send",
+    "lnemail.sendStatus",
+    "lnemail.sendInvoice"
   ],
   "contractCases": [
     {
@@ -576,6 +588,14 @@
       }
     },
     {
+      "name": "provider rules snapshot includes LNemail",
+      "method": "providers.snapshot",
+      "params": {},
+      "types": {
+        "lnemail.queries": "object"
+      }
+    },
+    {
       "name": "both display modes",
       "method": "message.render",
       "params": {
@@ -691,7 +711,22 @@
     }
   ],
   "unreleased": {
-    "methods": [],
-    "cases": []
+    "methods": [
+      "lnemail.createAccount",
+      "lnemail.signupInvoice",
+      "lnemail.paymentStatus",
+      "lnemail.account",
+      "lnemail.list",
+      "lnemail.read",
+      "lnemail.delete",
+      "lnemail.deleteMany",
+      "lnemail.recentSends",
+      "lnemail.send",
+      "lnemail.sendStatus",
+      "lnemail.sendInvoice"
+    ],
+    "cases": [
+      "provider rules snapshot includes LNemail"
+    ]
   }
 }

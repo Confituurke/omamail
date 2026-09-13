@@ -126,6 +126,31 @@ var FACTS = {
     },
     "webHomeUrl": ""
   },
+  "lnemail": {
+    "addressSearch": false,
+    "capabilities": {
+      "archive": false,
+      "batch": true,
+      "conversations": false,
+      "labels": false,
+      "manageLabels": false,
+      "move": false,
+      "search": false,
+      "send": true,
+      "spam": false,
+      "star": false,
+      "threads": false,
+      "web": false,
+      "webBox": false
+    },
+    "inheritedDefault": "in:inbox",
+    "nativeSync": true,
+    "queries": {
+      "inbox": "",
+      "unread": "unread"
+    },
+    "webHomeUrl": "https://lnemail.net"
+  },
   "outlook": {
     "addressSearch": false,
     "capabilities": {

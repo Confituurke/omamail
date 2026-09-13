@@ -48,5 +48,9 @@
     "archive": "folder:\\Archive",
     "spam": "folder:\\Junk",
     "trash": "folder:\\Trash"
+  },
+  "lnemail": {
+    "inbox": "",
+    "unread": "unread"
   }
 }
