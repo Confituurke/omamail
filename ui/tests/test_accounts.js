@@ -450,6 +450,10 @@ assert.strictEqual(accounts.count(accounts.discardDraftAt(pendingList, 0)), 3)
   assert.strictEqual(accounts.makeAccount({ email: "j@x.com", provider: "pigeon" }).provider, "gmail")
   assert.strictEqual(accounts.makeAccount({ email: "j@x.com", provider: "IMAP" }).provider, "imap")
   assert.strictEqual(accounts.makeAccount({ email: "j@x.com", provider: " hey " }).provider, "hey")
+  // A regression: this silently downgraded a brand new LNemail draft to
+  // Gmail, which is why "unrecognised" above must never mean "any provider
+  // this file has not been told about yet" without a test naming each one.
+  assert.strictEqual(accounts.makeAccount({ email: "j@x.com", provider: "lnemail" }).provider, "lnemail")
 
   // A Gmail account keeps the bare address as its id, so nothing already on
   // disk — its cache directory, its keyring entry, the activeId in the file —

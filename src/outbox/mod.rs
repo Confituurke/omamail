@@ -370,7 +370,7 @@ impl Inner {
         match method {
             "outbox.enqueue" => {
                 let provider = text(params, "provider")?;
-                if !["gmail", "outlook", "imap", "jmap", "hey"].contains(&provider) {
+                if !["gmail", "outlook", "imap", "jmap", "hey", "lnemail"].contains(&provider) {
                     return Err("outbox_invalid_provider");
                 }
                 let payload = params

@@ -173,6 +173,7 @@ pub async fn send(
         "gmail" => gmail.call("gmail.send", &params).await?,
         "imap" | "outlook" => crate::providers::imap::call("imap.send", &params).await?,
         "jmap" => jmap.call("jmap.send", &params).await?,
+        "lnemail" => crate::providers::lnemail::call("lnemail.send", &params).await?,
         "hey" => {
             params["program"] = json!(crate::providers::hey_access::program()?);
             let raw = raw.to_owned();
