@@ -58,6 +58,27 @@ Item {
   property int priceSats: 0
   property bool creatingAccount: false
 
+  // What `GET /account` last said about this mailbox's own expiry. LNemail
+  // accounts run out — 1000 sats bought one year — and this is the only
+  // place that answer is held; nothing here asks again on its own, since
+  // the renewal control is what asks when it is actually looked at.
+  property bool statusChecked: false
+  property bool statusBusy: false
+  property string statusError: ""
+  property string expiresAt: ""
+  property bool isExpired: false
+  property int daysUntilExpiry: -1
+  property bool renewalEligible: false
+
+  // The pending renewal invoice, the same shape as the signup one above and
+  // for the same reason: paid out of band, only displayed and polled here.
+  property string renewalPaymentRequest: ""
+  property string renewalPaymentHash: ""
+  property int renewalPriceSats: 0
+  property int renewalYears: 1
+  property bool renewing: false
+  property string renewalError: ""
+
   signal loginSucceeded()
   signal loggedOut()
   signal sessionUnavailable(string reason)
@@ -139,6 +160,7 @@ Item {
     token = value
     finishWaiters(token, "")
     loginSucceeded()
+    refreshAccountStatus()
   }
 
   // Path one: an existing LNemail account's access token, pasted in. Verified
@@ -168,13 +190,122 @@ Item {
         completeSignIn(false, "", friendlyError(error.message, "That token was refused"))
         return
       }
-      var learned = String((result || {}).email_address || "")
+      var account = result || {}
+      var learned = String(account.email_address || "")
       if (learned === "") {
         completeSignIn(false, "", "LNemail did not name an address for that token")
         return
       }
+      // The same answer a dedicated status check would ask for, so signing
+      // in does not cost a second round trip for it.
+      applyAccountStatus(account)
       completeSignIn(true, learned, "")
     })
+  }
+
+  function applyAccountStatus(value) {
+    statusChecked = true
+    statusError = ""
+    expiresAt = String(value.expires_at || "")
+    isExpired = value.is_expired === true
+    var days = Number(value.days_until_expiry)
+    daysUntilExpiry = isFinite(days) ? days : -1
+    renewalEligible = value.renewal_eligible === true
+  }
+
+  // Asked for on demand — when the renewal control opens — rather than on a
+  // timer: nothing here needs to be fresher than the last time it was looked
+  // at, and a background poll would mean a request for every open mailbox
+  // whether anyone was looking at its expiry or not.
+  function refreshAccountStatus() {
+    if (!backend || !loggedIn || statusBusy) return
+    statusBusy = true
+    backend.call("lnemail.account", { accountId: root.accountId }, function(result, error) {
+      statusBusy = false
+      if (error) {
+        statusChecked = true
+        statusError = friendlyError(error.message, "Could not check the mailbox's expiry")
+        return
+      }
+      applyAccountStatus(result || {})
+    })
+  }
+
+  // A brand new mailbox, created here and paid for out of band, in the
+  // exact shape `createAccount` above uses for its own invoice: displayed
+  // and polled, never touched by a wallet.
+  function renew(years) {
+    if (renewing || !backend || !loggedIn) return
+    renewalError = ""
+    renewing = true
+    renewalPaymentRequest = ""
+    renewalPaymentHash = ""
+    renewalPriceSats = 0
+    renewalYears = Math.max(1, Math.min(10, Math.round(Number(years) || 1)))
+    backend.call("lnemail.renewalInvoice",
+      { accountId: root.accountId, years: renewalYears },
+      function(result, error) {
+        if (!root.renewing) return // cancelled meanwhile
+        if (error) {
+          renewing = false
+          renewalError = friendlyError(error.message, "Could not start the renewal")
+          return
+        }
+        var value = result || {}
+        var invoice = String(value.payment_request || "")
+        var hash = String(value.payment_hash || "")
+        if (invoice === "" || hash === "") {
+          renewing = false
+          renewalError = "LNemail did not return a renewal invoice"
+          return
+        }
+        renewalPaymentRequest = invoice
+        renewalPaymentHash = hash
+        renewalPriceSats = Number(value.price_sats) || 0
+        renewalPoll.running = true
+      })
+  }
+
+  function cancelRenewal() {
+    renewalPoll.running = false
+    renewing = false
+    renewalPaymentRequest = ""
+    renewalPaymentHash = ""
+    renewalPriceSats = 0
+  }
+
+  function pollRenewal() {
+    if (!backend || renewalPaymentHash === "" || !renewing) return
+    var askedHash = renewalPaymentHash
+    backend.call("lnemail.renewalStatus",
+      { accountId: root.accountId, paymentHash: askedHash },
+      function(result, error) {
+        if (!root.renewing || root.renewalPaymentHash !== askedHash) return
+        if (error) return // a transient failure is retried on the next tick
+        var value = result || {}
+        var status = String(value.payment_status || "")
+        if (status === "paid") {
+          renewalPoll.running = false
+          renewing = false
+          renewalPaymentRequest = ""
+          renewalPaymentHash = ""
+          var extended = String(value.new_expires_at || "")
+          if (extended !== "") expiresAt = extended
+          isExpired = false
+          // The day count and eligibility window move with the new date;
+          // asking again is simpler than recomputing them here.
+          refreshAccountStatus()
+        } else if (status === "expired" || status === "failed") {
+          renewalPoll.running = false
+          renewing = false
+          renewalPaymentRequest = ""
+          renewalPaymentHash = ""
+          renewalError = status === "expired"
+            ? "That invoice expired before it was paid. Try renewing again"
+            : "The renewal payment failed. Try renewing again"
+        }
+        // "pending" says nothing and is silent: the poll simply continues.
+      })
   }
 
   function completeSignIn(ok, learnedEmail, error) {
@@ -298,6 +429,9 @@ Item {
     token = ""
     pendingToken = ""
     tokenChecked = true
+    cancelRenewal()
+    statusChecked = false
+    statusError = ""
     var attributes = Credentials.lnemailKeyringAttributes(accountId)
     if (attributes.length > 0) {
       keyringClear.command = ["secret-tool", "clear"].concat(attributes)
@@ -354,6 +488,13 @@ Item {
     interval: 3000
     repeat: true
     onTriggered: root.pollPayment()
+  }
+
+  Timer {
+    id: renewalPoll
+    interval: 3000
+    repeat: true
+    onTriggered: root.pollRenewal()
   }
 
   Process {

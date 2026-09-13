@@ -319,6 +319,37 @@ Item {
   readonly property string editingProvider: page === "setup" ? String(navPage.provider || "") : ""
   readonly property bool accountDraftOpen: page === "setup" && navPage.draft === true
 
+  // Whether the LNemail renewal control belongs in the header: looking at
+  // one LNemail mailbox on its own, or at every mailbox at once with at
+  // least one LNemail account among them. Neither the single-account
+  // question nor the unified one alone is enough — a header built for
+  // whichever mailbox happens to be current would hide the control the
+  // moment "All mail" was chosen with an LNemail account still connected.
+  readonly property bool hasLnemailInView: !!root.service && (root.service.unified
+    ? (root.service.accountList && root.service.accountList.accounts
+        ? root.service.accountList.accounts : []).some(function(account) {
+        return account.provider === "lnemail"
+      })
+    : root.service.providerId === "lnemail")
+
+  // Looking at exactly one LNemail mailbox is the one case worth naming its
+  // own status at a glance; "All mail" may hold more than one, and the
+  // popup itself is where each one's own expiry is worth reading.
+  readonly property var lnemailCurrentAuth: (!!root.service && !root.service.unified
+    && root.service.providerId === "lnemail") ? root.service.auth : null
+  readonly property string lnemailRenewalTooltip: {
+    var auth = root.lnemailCurrentAuth
+    if (!auth || !auth.statusChecked) return "LNemail renewal"
+    if (auth.isExpired) return "LNemail mailbox expired — renew"
+    if (auth.daysUntilExpiry < 0) return "LNemail renewal"
+    return "LNemail renews in " + auth.daysUntilExpiry + (auth.daysUntilExpiry === 1 ? " day" : " days")
+  }
+  readonly property bool lnemailRenewalUrgent: {
+    var auth = root.lnemailCurrentAuth
+    return !!auth && auth.statusChecked
+      && (auth.isExpired || (auth.daysUntilExpiry >= 0 && auth.daysUntilExpiry <= 30))
+  }
+
   // What the root is made of. Recomputed when a mailbox becomes usable or
   // stops being — and, before any is, whenever the service learns more about
   // the accounts it has, but only while the user has not moved off the root
@@ -1737,6 +1768,23 @@ Item {
           anchors.verticalCenter: parent.verticalCenter
           spacing: Style.space(8)
 
+          // LNemail is the one mailbox that runs out: 1000 sats buys it a
+          // year. Shown whenever one is in view — alone or among "All mail"
+          // — because its expiry is worth a standing glance, not something
+          // to notice only once it has already lapsed.
+          IconButton {
+            id: lnemailRenewalButton
+            objectName: "lnemail-renewal-button"
+            anchors.verticalCenter: parent.verticalCenter
+            visible: !root.showPage && !root.composing && !root.calendarVisible && root.hasLnemailInView
+            iconName: "renew"
+            tooltipText: root.lnemailRenewalTooltip
+            foreground: root.lnemailRenewalUrgent ? root.danger : root.dim
+            hoverColor: root.foreground
+            fontFamily: root.fontFamily
+            onClicked: lnemailRenewalPopup.openPopup()
+          }
+
           // Checking for mail and writing one are both things you do to the
           // mailbox as a whole, so they sit together. The menu is the window's
           // own, and it stays on the left with the mark.
@@ -2984,6 +3032,19 @@ Item {
         popupBorderColor: root.popupBorder
         panelFontFamily: root.fontFamily
         onConfirmed: function(request) { root.confirmAccountRemoval(request) }
+      }
+
+      LnemailRenewalPopup {
+        id: lnemailRenewalPopup
+        anchors.fill: parent
+        service: root.service
+        textColor: root.foreground
+        dimColor: root.dim
+        accentColor: root.accent
+        dangerColor: root.danger
+        popupBackgroundColor: root.popupBackground
+        popupBorderColor: root.popupBorder
+        panelFontFamily: root.fontFamily
       }
 
       ConfirmDeleteDialog {

@@ -189,6 +189,9 @@ pub const ALL: &[&str] = &[
     "lnemail.send",
     "lnemail.sendStatus",
     "lnemail.sendInvoice",
+    "lnemail.renewalInvoice",
+    "lnemail.renewalStatus",
+    "lnemail.renewalReissue",
 ];
 
 pub fn available() -> Vec<&'static str> {

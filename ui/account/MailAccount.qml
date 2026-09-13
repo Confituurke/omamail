@@ -2719,6 +2719,12 @@ Item {
       backend: root.backend
       pluginDir: root.pluginDir
       accountId: root.accountId
+      // Learned once at sign-in and written back onto the entry the same way
+      // Gmail's own address is (`onAccountIdentified` further down), so a
+      // fresh instance on the next launch starts from what was learned
+      // rather than from nothing — without this a restart forgot the
+      // mailbox's own address and could not restore its session at all.
+      email: root.configuredEmail
 
       onLoginSucceeded: {
         root.lastError = lastError

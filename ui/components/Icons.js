@@ -54,7 +54,8 @@ var GLYPHS = {
   video: 0xF0BDC,        // video-outline
   pin: 0xF0931,          // pin-outline
   people: 0xF000F,       // account-multiple-outline
-  agent: 0xF167A         // robot-outline — the message agent
+  agent: 0xF167A,        // robot-outline — the message agent
+  renew: 0xF140C         // lightning-bolt-outline — LNemail's own renewal control
 }
 
 // The filled form, for the names that have a state to show. A filled star

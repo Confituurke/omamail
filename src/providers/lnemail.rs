@@ -257,6 +257,36 @@ pub async fn call(method: &str, p: &Value) -> Result<Value, &'static str> {
             let body = json!({"exclude_provider": optional(exclude)});
             http::post(&["email", "send", hash, "new-invoice"], &body, &bearer).await
         }
+        "lnemail.renewalInvoice" => {
+            allowed(p, &["accountId", "years"])?;
+            let years = match p.get("years") {
+                None | Some(Value::Null) => None,
+                Some(Value::Number(n)) => {
+                    Some(n.as_u64().filter(|y| (1..=10).contains(y)).ok_or("invalid_params")?)
+                }
+                _ => return Err("invalid_params"),
+            };
+            let bearer = token(p).await?;
+            let body = match years {
+                Some(years) => json!({"years": years}),
+                None => json!({}),
+            };
+            http::post(&["account", "renew"], &body, &bearer).await
+        }
+        "lnemail.renewalStatus" => {
+            allowed(p, &["accountId", "paymentHash"])?;
+            let hash = segment(p, "paymentHash")?;
+            let bearer = token(p).await?;
+            http::get(&["account", "renew", "status", hash], &bearer).await
+        }
+        "lnemail.renewalReissue" => {
+            allowed(p, &["accountId", "paymentHash", "excludeProvider"])?;
+            let hash = segment(p, "paymentHash")?;
+            let exclude = text(p, "excludeProvider", false, 256)?;
+            let bearer = token(p).await?;
+            let body = json!({"exclude_provider": optional(exclude)});
+            http::post(&["account", "renew", hash, "new-invoice"], &body, &bearer).await
+        }
         _ => Err("unknown_method"),
     }
 }

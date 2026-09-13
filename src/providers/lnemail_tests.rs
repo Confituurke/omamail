@@ -84,6 +84,12 @@ async fn every_method_validates_its_params_before_any_credential_lookup() {
         ),
         ("lnemail.sendStatus", json!({"accountId":"not-an-account","paymentHash":"abc"})),
         ("lnemail.sendInvoice", json!({"accountId":"not-an-account","paymentHash":"abc"})),
+        ("lnemail.renewalInvoice", json!({"accountId":"not-an-account"})),
+        ("lnemail.renewalInvoice", json!({"accountId":"lnemail:user@example.org","years":0})),
+        ("lnemail.renewalInvoice", json!({"accountId":"lnemail:user@example.org","years":11})),
+        ("lnemail.renewalInvoice", json!({"accountId":"lnemail:user@example.org","years":1.5})),
+        ("lnemail.renewalStatus", json!({"accountId":"not-an-account","paymentHash":"abc"})),
+        ("lnemail.renewalReissue", json!({"accountId":"not-an-account","paymentHash":"abc"})),
         ("lnemail.unknown", json!({})),
     ] {
         assert!(
