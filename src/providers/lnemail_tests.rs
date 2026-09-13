@@ -39,39 +39,20 @@ fn boolean_defaults_to_false_and_refuses_anything_but_a_bool() {
 }
 
 #[test]
-fn email_address_requires_a_local_part_a_domain_and_no_whitespace() {
-    assert!(email_address("user@example.org").is_ok());
-    for bad in ["", "no-at-sign", "@example.org", "user@", "user@nodot", "us er@example.org"] {
-        assert_eq!(email_address(bad), Err("invalid_params"));
-    }
-}
-
-#[test]
-fn attachments_are_capped_in_count_and_combined_size() {
-    assert_eq!(attachments(&json!({})).unwrap(), Vec::<Value>::new());
-    let one = json!({"attachments": [{"filename":"a.txt","contentType":"text/plain","content":"aGVsbG8="}]});
-    assert_eq!(
-        attachments(&one).unwrap(),
-        vec![json!({"filename":"a.txt","content_type":"text/plain","content":"aGVsbG8="})]
-    );
-    let too_many: Vec<Value> = (0..MAX_ATTACHMENTS + 1)
-        .map(|_| json!({"filename":"a","contentType":"text/plain","content":"x"}))
-        .collect();
-    assert_eq!(
-        attachments(&json!({"attachments": too_many})),
-        Err("invalid_params")
-    );
-    let oversized = json!({"attachments": [{
-        "filename":"a","contentType":"text/plain",
-        "content": "x".repeat(MAX_ATTACHMENT_TOTAL + 1)
-    }]});
-    assert_eq!(attachments(&oversized), Err("invalid_params"));
-}
-
-#[test]
 fn optional_turns_an_absent_value_into_json_null_never_an_empty_string() {
     assert_eq!(optional(""), Value::Null);
     assert_eq!(optional("x"), json!("x"));
+}
+
+#[tokio::test]
+async fn an_explicit_token_is_used_directly_and_never_needs_an_account() {
+    // Verifying a pasted token, or one a signup invoice just paid for, happens
+    // before the account is registered — so this must not touch the keyring.
+    assert_eq!(token(&json!({"token": "sekret"})).await.unwrap(), "sekret");
+    assert_eq!(token(&json!({})).await, Err("invalid_params"));
+    for bad in ["", "a\nb", "a\0b"] {
+        assert_eq!(token(&json!({"token": bad})).await, Err("invalid_params"));
+    }
 }
 
 #[tokio::test]
@@ -93,13 +74,12 @@ async fn every_method_validates_its_params_before_any_credential_lookup() {
         ("lnemail.deleteMany", json!({"accountId":"not-an-account","ids":["abc"]})),
         ("lnemail.deleteMany", json!({"accountId":"lnemail:user@example.org","ids":[]})),
         ("lnemail.recentSends", json!({"accountId":"not-an-account"})),
+        ("lnemail.send", json!({"accountId":"not-an-account","raw":"not valid base64!!"})),
         (
             "lnemail.send",
-            json!({"accountId":"not-an-account","recipient":"user@example.org","subject":"","body":""}),
-        ),
-        (
-            "lnemail.send",
-            json!({"accountId":"lnemail:user@example.org","recipient":"bad","subject":"","body":""}),
+            // Valid base64url of a message with no recipient at all: refused
+            // by `decode_outgoing` itself, still before any keyring lookup.
+            json!({"accountId":"lnemail:user@example.org","raw": URL_SAFE_NO_PAD.encode("Subject: hi\r\n\r\nbody")}),
         ),
         ("lnemail.sendStatus", json!({"accountId":"not-an-account","paymentHash":"abc"})),
         ("lnemail.sendInvoice", json!({"accountId":"not-an-account","paymentHash":"abc"})),

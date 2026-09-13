@@ -8,16 +8,17 @@
 //! refresh token and rotates nothing, so there is no session state to keep
 //! here beyond the HTTP transport itself.
 use super::lnemail_http as http;
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde_json::{Value, json};
 
 #[path = "lnemail_resource.rs"]
 mod resource;
 
-const MAX_TEXT: usize = 1024 * 1024;
-const MAX_SHORT: usize = 4096;
-const MAX_ATTACHMENT_TOTAL: usize = 8 * 1024 * 1024;
-const MAX_ATTACHMENTS: usize = 20;
 const MAX_DELETE_BATCH: usize = 500;
+// The same decoded-message ceiling `imap.send` accepts, since this is the
+// same `raw` field every provider's send is handed.
+const MAX_RAW_MESSAGE_DECODED: usize = 32 * 1024 * 1024;
+const MAX_RAW_MESSAGE_ENCODED: usize = MAX_RAW_MESSAGE_DECODED * 4 / 3 + 4;
 
 fn allowed(p: &Value, keys: &[&str]) -> Result<(), &'static str> {
     if p.as_object()
@@ -73,50 +74,25 @@ fn optional(value: &str) -> Value {
     }
 }
 
-fn email_address(value: &str) -> Result<(), &'static str> {
-    let Some((local, domain)) = value.split_once('@') else {
-        return Err("invalid_params");
-    };
-    if local.is_empty()
-        || domain.is_empty()
-        || value.len() > 320
-        || !domain.contains('.')
-        || value.bytes().any(|b| b.is_ascii_whitespace())
-    {
-        return Err("invalid_params");
+/// A token supplied directly, for verifying a pasted or freshly paid-for
+/// token before the account exists to resolve one through the keyring.
+fn explicit_token(p: &Value) -> Result<Option<&str>, &'static str> {
+    match p.get("token") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) => {
+            if s.is_empty() || s.len() > 16384 || s.bytes().any(|b| b < 32 || b == 127) {
+                return Err("invalid_params");
+            }
+            Ok(Some(s.as_str()))
+        }
+        _ => Err("invalid_params"),
     }
-    Ok(())
-}
-
-fn attachments(p: &Value) -> Result<Vec<Value>, &'static str> {
-    let list = match p.get("attachments") {
-        None | Some(Value::Null) => return Ok(Vec::new()),
-        Some(Value::Array(list)) => list,
-        _ => return Err("invalid_params"),
-    };
-    if list.len() > MAX_ATTACHMENTS {
-        return Err("invalid_params");
-    }
-    let mut total = 0usize;
-    let mut out = Vec::with_capacity(list.len());
-    for item in list {
-        let filename = text(item, "filename", true, 512)?;
-        let content_type = text(item, "contentType", true, 256)?;
-        let content = text(item, "content", true, MAX_ATTACHMENT_TOTAL)?;
-        total = total
-            .checked_add(content.len())
-            .filter(|total| *total <= MAX_ATTACHMENT_TOTAL)
-            .ok_or("invalid_params")?;
-        out.push(json!({
-            "filename": filename,
-            "content_type": content_type,
-            "content": content,
-        }));
-    }
-    Ok(out)
 }
 
 async fn token(p: &Value) -> Result<String, &'static str> {
+    if let Some(explicit) = explicit_token(p)? {
+        return Ok(explicit.to_owned());
+    }
     let account = p.get("accountId").and_then(Value::as_str).ok_or("invalid_params")?;
     crate::auth::password("lnemail", account).await
 }
@@ -144,7 +120,7 @@ pub async fn call(method: &str, p: &Value) -> Result<Value, &'static str> {
             http::get(&["payment", hash], "").await
         }
         "lnemail.account" => {
-            allowed(p, &["accountId"])?;
+            allowed(p, &["accountId", "token"])?;
             let bearer = token(p).await?;
             http::get(&["account"], &bearer).await
         }
@@ -204,35 +180,20 @@ pub async fn call(method: &str, p: &Value) -> Result<Value, &'static str> {
             http::get(&["email", "sends", "recent"], &bearer).await
         }
         "lnemail.send" => {
-            allowed(
-                p,
-                &[
-                    "accountId",
-                    "recipient",
-                    "subject",
-                    "body",
-                    "inReplyTo",
-                    "references",
-                    "attachments",
-                ],
-            )?;
-            let recipient = text(p, "recipient", true, MAX_SHORT)?;
-            email_address(recipient)?;
-            let subject = text(p, "subject", true, MAX_SHORT)?;
-            let email_body = text(p, "body", true, MAX_TEXT)?;
-            let in_reply_to = text(p, "inReplyTo", false, MAX_SHORT)?;
-            let references = text(p, "references", false, MAX_TEXT)?;
-            let files = attachments(p)?;
+            // `raw` is the complete RFC 822 message `MailAccount` builds for
+            // every provider, attachments already embedded — the same shape
+            // Gmail's send endpoint takes and IMAP puts on the wire
+            // unchanged. LNemail's own endpoint wants none of that, so it is
+            // taken apart into the fields the endpoint has.
+            allowed(p, &["accountId", "raw"])?;
+            let encoded = text(p, "raw", true, MAX_RAW_MESSAGE_ENCODED)?;
+            let bytes = URL_SAFE_NO_PAD.decode(encoded).map_err(|_| "invalid_params")?;
+            if bytes.len() > MAX_RAW_MESSAGE_DECODED {
+                return Err("invalid_params");
+            }
+            let fields = resource::decode_outgoing(&bytes)?;
             let bearer = token(p).await?;
-            let body = json!({
-                "recipient": recipient,
-                "subject": subject,
-                "body": email_body,
-                "in_reply_to": optional(in_reply_to),
-                "references": optional(references),
-                "attachments": files,
-            });
-            http::post(&["email", "send"], &body, &bearer).await
+            http::post(&["email", "send"], &fields, &bearer).await
         }
         "lnemail.sendStatus" => {
             allowed(p, &["accountId", "paymentHash"])?;

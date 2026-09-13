@@ -199,6 +199,136 @@ pub fn attachment_data(entry: &Value, index: usize) -> Result<Value, &'static st
     Ok(json!({"size": bytes.len(), "data": URL_SAFE_NO_PAD.encode(&bytes)}))
 }
 
+// --------------------------------------------------------------- outgoing
+//
+// `MailAccount` builds the same payload for every provider: a base64url `raw`
+// field, a complete RFC 822 message with its attachments already embedded —
+// that is what Gmail's own send endpoint takes, and what goes out over SMTP
+// unchanged for IMAP and Outlook. LNemail's `POST /email/send` takes none of
+// that; it wants a recipient, a subject, a plain-text body and attachments
+// apart, so the message is taken apart again here and handed over as the
+// fields the endpoint has — the same reason HEY's own send decodes `raw`
+// before it ever reaches the CLI.
+
+const MAX_OUTGOING_ATTACHMENT_TOTAL: usize = 8 * 1024 * 1024;
+const MAX_OUTGOING_ATTACHMENTS: usize = 20;
+
+fn header_value(mail: &mailparse::ParsedMail, name: &str) -> String {
+    use mailparse::MailHeaderMap;
+    mail.headers.get_first_value(name).unwrap_or_default()
+}
+
+fn addresses(mail: &mailparse::ParsedMail, name: &str) -> Vec<String> {
+    let value = header_value(mail, name);
+    if value.is_empty() {
+        return Vec::new();
+    }
+    let Ok(list) = mailparse::addrparse(&value) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for addr in list.iter() {
+        match addr {
+            mailparse::MailAddr::Single(info) => out.push(info.addr.clone()),
+            mailparse::MailAddr::Group(group) => {
+                out.extend(group.addrs.iter().map(|info| info.addr.clone()));
+            }
+        }
+    }
+    out
+}
+
+/// LNemail's send takes exactly one recipient. Every address named across
+/// To, Cc and Bcc has to be that one recipient or refused outright — sending
+/// to the first and silently dropping the rest is mail that never reaches
+/// someone the sender named.
+fn single_recipient(mail: &mailparse::ParsedMail) -> Result<String, &'static str> {
+    let mut all = addresses(mail, "To");
+    all.extend(addresses(mail, "Cc"));
+    all.extend(addresses(mail, "Bcc"));
+    match all.as_slice() {
+        [one] => Ok(one.clone()),
+        [] => Err("lnemail_recipient_required"),
+        _ => Err("lnemail_single_recipient_only"),
+    }
+}
+
+fn is_attachment(part: &mailparse::ParsedMail) -> bool {
+    part.get_content_disposition().disposition == mailparse::DispositionType::Attachment
+        || (!part.ctype.mimetype.starts_with("text/")
+            && !part.ctype.mimetype.starts_with("multipart/"))
+}
+
+fn walk_outgoing(
+    part: &mailparse::ParsedMail,
+    depth: usize,
+    plain: &mut Option<String>,
+    attachments: &mut Vec<Value>,
+) -> Result<(), &'static str> {
+    if depth > 12 {
+        return Ok(());
+    }
+    if !part.subparts.is_empty() {
+        for child in &part.subparts {
+            walk_outgoing(child, depth + 1, plain, attachments)?;
+        }
+        return Ok(());
+    }
+    if is_attachment(part) {
+        if attachments.len() >= MAX_OUTGOING_ATTACHMENTS {
+            return Err("invalid_params");
+        }
+        let disposition = part.get_content_disposition();
+        let filename = disposition
+            .params
+            .get("filename")
+            .or_else(|| part.ctype.params.get("name"))
+            .cloned()
+            .unwrap_or_else(|| "attachment".to_owned());
+        let bytes = part.get_body_raw().map_err(|_| "invalid_params")?;
+        attachments.push(json!({
+            "filename": filename,
+            "content_type": part.ctype.mimetype,
+            "content": STANDARD.encode(&bytes),
+        }));
+    } else if plain.is_none() && part.ctype.mimetype == "text/plain" {
+        *plain = Some(part.get_body().map_err(|_| "invalid_params")?);
+    }
+    Ok(())
+}
+
+fn optional_header(value: String) -> Value {
+    if value.is_empty() { Value::Null } else { Value::String(value) }
+}
+
+/// A complete RFC 822 message, taken apart into LNemail's own send fields.
+pub fn decode_outgoing(bytes: &[u8]) -> Result<Value, &'static str> {
+    let mail = mailparse::parse_mail(bytes).map_err(|_| "invalid_params")?;
+    let recipient = single_recipient(&mail)?;
+    let subject = header_value(&mail, "Subject");
+    let in_reply_to = header_value(&mail, "In-Reply-To");
+    let references = header_value(&mail, "References");
+    let mut plain = None;
+    let mut attachments = Vec::new();
+    walk_outgoing(&mail, 0, &mut plain, &mut attachments)?;
+    let total: usize = attachments
+        .iter()
+        .filter_map(|item| item["content"].as_str())
+        .map(str::len)
+        .sum();
+    if total > MAX_OUTGOING_ATTACHMENT_TOTAL * 4 / 3 + attachments.len() * 4 {
+        return Err("invalid_params");
+    }
+    Ok(json!({
+        "recipient": recipient,
+        "subject": subject,
+        "body": plain.unwrap_or_default(),
+        "in_reply_to": optional_header(in_reply_to),
+        "references": optional_header(references),
+        "attachments": attachments,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -325,5 +455,77 @@ mod tests {
         assert_ne!(internal_date("Sun, 13 Sep 2026 12:00:00 +0000"), "");
         assert_eq!(internal_date(""), "");
         assert_eq!(internal_date("not a date"), "");
+    }
+
+    #[test]
+    fn a_plain_message_decodes_to_lnemail_s_own_send_fields() {
+        let raw = b"To: a@example.org\r\nSubject: Hi\r\nIn-Reply-To: <m1@example.org>\r\n\
+            References: <m0@example.org> <m1@example.org>\r\n\
+            Content-Type: text/plain; charset=utf-8\r\n\r\nhello there";
+        let fields = decode_outgoing(raw).unwrap();
+        assert_eq!(fields["recipient"], "a@example.org");
+        assert_eq!(fields["subject"], "Hi");
+        assert_eq!(fields["body"], "hello there");
+        assert_eq!(fields["in_reply_to"], "<m1@example.org>");
+        assert_eq!(fields["references"], "<m0@example.org> <m1@example.org>");
+        assert_eq!(fields["attachments"], json!([]));
+    }
+
+    #[test]
+    fn no_recipient_or_more_than_one_across_to_cc_and_bcc_is_refused() {
+        let none = b"Subject: Hi\r\n\r\nbody";
+        assert_eq!(decode_outgoing(none), Err("lnemail_recipient_required"));
+        let two = b"To: a@example.org\r\nCc: b@example.org\r\n\r\nbody";
+        assert_eq!(decode_outgoing(two), Err("lnemail_single_recipient_only"));
+    }
+
+    #[test]
+    fn a_multipart_message_keeps_the_plain_part_and_collects_attachments_by_disposition() {
+        let raw = b"To: a@example.org\r\nSubject: Hi\r\n\
+            Content-Type: multipart/mixed; boundary=x\r\n\r\n\
+            --x\r\nContent-Type: multipart/alternative; boundary=y\r\n\r\n\
+            --y\r\nContent-Type: text/plain\r\n\r\nplain body\r\n\
+            --y\r\nContent-Type: text/html\r\n\r\n<p>html body</p>\r\n--y--\r\n\
+            --x\r\nContent-Type: application/octet-stream\r\n\
+            Content-Disposition: attachment; filename=blob.bin\r\n\
+            Content-Transfer-Encoding: base64\r\n\r\nAAEC\r\n--x--\r\n";
+        let fields = decode_outgoing(raw).unwrap();
+        assert_eq!(fields["body"], "plain body", "the HTML alternative is dropped, LNemail sends plain text only");
+        let attachments = fields["attachments"].as_array().unwrap();
+        assert_eq!(attachments.len(), 1);
+        assert_eq!(attachments[0]["filename"], "blob.bin");
+        assert_eq!(attachments[0]["content_type"], "application/octet-stream");
+        assert_eq!(
+            STANDARD.decode(attachments[0]["content"].as_str().unwrap()).unwrap(),
+            vec![0, 1, 2]
+        );
+    }
+
+    #[test]
+    fn a_missing_in_reply_to_and_references_are_null_not_empty_strings() {
+        let raw = b"To: a@example.org\r\nSubject: Hi\r\n\r\nbody";
+        let fields = decode_outgoing(raw).unwrap();
+        assert_eq!(fields["in_reply_to"], Value::Null);
+        assert_eq!(fields["references"], Value::Null);
+    }
+
+    #[test]
+    fn attachments_over_the_combined_size_limit_are_refused() {
+        // Base64 in the message itself, so it decodes to more than the cap —
+        // encoded length runs a third larger than the decoded bytes it holds.
+        let big = "A".repeat((MAX_OUTGOING_ATTACHMENT_TOTAL + 1024) * 4 / 3 + 4);
+        let raw = format!(
+            "To: a@example.org\r\nSubject: Hi\r\nContent-Type: multipart/mixed; boundary=x\r\n\r\n\
+            --x\r\nContent-Type: text/plain\r\n\r\nbody\r\n\
+            --x\r\nContent-Type: application/octet-stream\r\n\
+            Content-Disposition: attachment; filename=big.bin\r\n\
+            Content-Transfer-Encoding: base64\r\n\r\n{big}\r\n--x--\r\n"
+        );
+        assert_eq!(decode_outgoing(raw.as_bytes()), Err("invalid_params"));
+    }
+
+    #[test]
+    fn malformed_bytes_are_refused_rather_than_panicking() {
+        assert!(decode_outgoing(b"\xff\xfe not a message").is_err());
     }
 }
