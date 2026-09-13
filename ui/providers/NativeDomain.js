@@ -147,6 +147,7 @@ var FACTS = {
     "nativeSync": true,
     "queries": {
       "inbox": "",
+      "sent": "sent",
       "unread": "unread"
     },
     "webHomeUrl": "https://lnemail.net"

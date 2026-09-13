@@ -270,6 +270,12 @@ assert.strictEqual(provider.hasMailbox("imap", "archive"), true)
 assert.strictEqual(provider.hasMailbox("gmail", "drafts"), true)
 assert.strictEqual(provider.hasMailbox("hey", "drafts"), true)
 assert.strictEqual(provider.hasMailbox("imap", "drafts"), true)
+// Sent is the one folder LNemail offers beside Inbox and Unread — its own
+// status log of recent outgoing payments, never a copy of what was sent.
+assert.strictEqual(provider.hasMailbox("lnemail", "sent"), true)
+assert.strictEqual(provider.hasMailbox("lnemail", "drafts"), false, "LNemail keeps no drafts")
+assert.strictEqual(provider.hasMailbox("lnemail", "archive"), false, "LNemail has no folders to archive into")
+assert.strictEqual(provider.mailboxFor("lnemail", "sent").label, "Sent")
 assert.strictEqual(provider.mailboxFor("gmail", "nonesuch").key, "inbox",
   "an unknown mailbox key falls back to the inbox rather than to undefined")
 assert.strictEqual(provider.mailboxFor("imap", "starred").label, "Flagged",

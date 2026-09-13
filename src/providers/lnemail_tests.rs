@@ -66,6 +66,7 @@ async fn every_method_validates_its_params_before_any_credential_lookup() {
         ("lnemail.paymentStatus", json!({"paymentHash":""})),
         ("lnemail.account", json!({"accountId":"not-an-account"})),
         ("lnemail.list", json!({"accountId":"not-an-account"})),
+        ("lnemail.list", json!({"accountId":"not-an-account","query":"sent"})),
         ("lnemail.read", json!({"accountId":"not-an-account","id":"abc"})),
         ("lnemail.read", json!({"accountId":"lnemail:user@example.org","id":".."})),
         ("lnemail.attachment", json!({"accountId":"not-an-account","id":"abc","attachmentId":"0"})),
@@ -95,4 +96,40 @@ async fn every_method_validates_its_params_before_any_credential_lookup() {
 #[tokio::test]
 async fn unknown_method_is_refused() {
     assert_eq!(call("lnemail.bogus", &json!({})).await, Err("unknown_method"));
+}
+
+#[test]
+fn sent_hash_recognizes_only_its_own_prefix() {
+    assert_eq!(sent_hash("send-abc123"), Some("abc123"));
+    assert_eq!(sent_hash("abc123"), None);
+    assert_eq!(sent_hash("send-"), Some(""));
+    assert_eq!(sent_hash("sender-abc"), None);
+}
+
+#[tokio::test]
+async fn a_sent_log_row_is_refused_deletion_before_any_network_call() {
+    // The guard runs right after segment() validates the id shape, so a
+    // clearly-valid accountId format proves this is the sent-log check and
+    // not an unrelated parameter failure.
+    let account = json!("lnemail:user@example.org");
+    assert_eq!(
+        call("lnemail.delete", &json!({"accountId": account, "id": "send-abc123"})).await,
+        Err("lnemail_sent_log_readonly")
+    );
+    assert_eq!(
+        call(
+            "lnemail.deleteMany",
+            &json!({"accountId": account, "ids": ["send-abc123"]})
+        )
+        .await,
+        Err("lnemail_sent_log_readonly")
+    );
+    assert_eq!(
+        call(
+            "lnemail.attachment",
+            &json!({"accountId": account, "id": "send-abc123", "attachmentId": "0"})
+        )
+        .await,
+        Err("lnemail_not_found")
+    );
 }

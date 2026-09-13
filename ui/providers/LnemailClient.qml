@@ -37,6 +37,7 @@ Item {
     if (code === "lnemail_rate_limited") return "LNemail asked to slow down. Try again shortly"
     if (code === "lnemail_recipient_required") return "Add a recipient before sending"
     if (code === "lnemail_single_recipient_only") return "LNemail can send to one recipient at a time"
+    if (code === "lnemail_sent_log_readonly") return "LNemail's own send log can't be edited or deleted here"
     return "Mail request failed"
   }
 
@@ -72,10 +73,12 @@ Item {
   }
 
   // A flat inbox has one listing and nothing to page through: LNemail's own
-  // `GET /emails` answers with everything in one call.
+  // `GET /emails` answers with everything in one call. "sent" is the one
+  // query this reads: LNemail's status log for recent outgoing payments
+  // instead of the inbox, and Rust is what tells the two apart.
   function listMessages(query, maxResults, pageToken, callback, progress) {
     var handle = newHandle()
-    call("lnemail.list", {}, function(result, error) {
+    call("lnemail.list", { query: String(query || "").trim() }, function(result, error) {
       if (error || !result) {
         if (typeof callback === "function") callback(null, error)
         return

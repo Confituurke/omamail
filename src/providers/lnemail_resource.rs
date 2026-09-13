@@ -93,6 +93,63 @@ pub fn list_row(entry: &Value) -> Value {
     })
 }
 
+fn capitalized(value: &str) -> String {
+    let mut chars = value.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
+    }
+}
+
+/// A row in `GET /email/sends/recent`: LNemail's only record of outgoing
+/// mail, and never a copy of what was actually sent — this is a status log,
+/// not an archive.
+pub fn sent_row(entry: &Value) -> Value {
+    let hash = text(&entry["payment_hash"]);
+    let id = format!("send-{hash}");
+    let date = {
+        let sent = text(&entry["sent_at"]);
+        if sent.is_empty() { text(&entry["created_at"]) } else { sent }
+    };
+    let mut headers = Vec::new();
+    header(&mut headers, "To", &text(&entry["recipient"]));
+    header(&mut headers, "Subject", &text(&entry["subject"]));
+    header(&mut headers, "Date", &date);
+    json!({
+        "id": id,
+        "threadId": id,
+        "labelIds": ["SENT"],
+        "internalDate": internal_date(&date),
+        "sizeEstimate": 0,
+        "snippet": format!(
+            "Payment {}, delivery {}",
+            text(&entry["payment_status"]),
+            text(&entry["delivery_status"])
+        ),
+        "payload": {
+            "mimeType": "text/plain",
+            "headers": headers,
+            "body": {"size": 0},
+            "parts": []
+        }
+    })
+}
+
+/// A send row opened as a message: there is no body to show, so the reader
+/// is told why rather than shown nothing or a request that quietly fails.
+pub fn sent_message(entry: &Value) -> Value {
+    let mut row = sent_row(entry);
+    let body = format!(
+        "LNemail does not keep a copy of what you sent — only this record that it \
+         was sent and whether it was delivered.\n\nPayment: {}\nDelivery: {}",
+        capitalized(&text(&entry["payment_status"])),
+        capitalized(&text(&entry["delivery_status"])),
+    );
+    row["payload"]["body"] = json!({"size": body.len(), "data": URL_SAFE_NO_PAD.encode(&body)});
+    row["snippet"] = json!("");
+    row
+}
+
 fn attachment_bytes(item: &Value) -> Vec<u8> {
     let content = text(&item["content"]);
     if text(&item["encoding"]) == "base64" {
@@ -527,5 +584,55 @@ mod tests {
     #[test]
     fn malformed_bytes_are_refused_rather_than_panicking() {
         assert!(decode_outgoing(b"\xff\xfe not a message").is_err());
+    }
+
+    #[test]
+    fn a_sent_row_names_itself_by_payment_hash_and_carries_no_body() {
+        let row = sent_row(&json!({
+            "payment_hash": "abc123",
+            "recipient": "a@example.org",
+            "subject": "Hi",
+            "payment_status": "paid",
+            "delivery_status": "sent",
+            "created_at": "2026-09-13T12:00:00Z",
+            "sent_at": "2026-09-13T12:00:05Z"
+        }));
+        assert_eq!(row["id"], "send-abc123");
+        assert_eq!(row["threadId"], "send-abc123");
+        assert_eq!(row["labelIds"], json!(["SENT"]));
+        assert_ne!(row["internalDate"], "");
+        assert_eq!(row["snippet"], "Payment paid, delivery sent");
+        assert_eq!(row["payload"]["body"]["size"], 0);
+        assert!(row["payload"]["body"].get("data").is_none());
+        let headers = row["payload"]["headers"].as_array().unwrap();
+        assert!(headers.contains(&json!({"name": "To", "value": "a@example.org"})));
+        assert!(headers.contains(&json!({"name": "Subject", "value": "Hi"})));
+    }
+
+    #[test]
+    fn a_sent_row_falls_back_to_created_at_when_never_confirmed_sent() {
+        let row = sent_row(&json!({
+            "payment_hash": "abc123", "recipient": "a@example.org", "subject": "Hi",
+            "payment_status": "pending", "delivery_status": "pending",
+            "created_at": "2026-09-13T12:00:00Z"
+        }));
+        assert_ne!(row["internalDate"], "");
+    }
+
+    #[test]
+    fn opening_a_sent_row_explains_there_is_no_stored_body() {
+        let message = sent_message(&json!({
+            "payment_hash": "abc123", "recipient": "a@example.org", "subject": "Hi",
+            "payment_status": "paid", "delivery_status": "failed",
+            "created_at": "2026-09-13T12:00:00Z"
+        }));
+        assert_eq!(message["id"], "send-abc123");
+        let body = URL_SAFE_NO_PAD
+            .decode(message["payload"]["body"]["data"].as_str().unwrap())
+            .unwrap();
+        let text = String::from_utf8(body).unwrap();
+        assert!(text.contains("does not keep a copy"));
+        assert!(text.contains("Payment: Paid"));
+        assert!(text.contains("Delivery: Failed"));
     }
 }

@@ -51,6 +51,7 @@
   },
   "lnemail": {
     "inbox": "",
-    "unread": "unread"
+    "unread": "unread",
+    "sent": "sent"
   }
 }

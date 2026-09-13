@@ -45,6 +45,16 @@ fn segment<'a>(p: &'a Value, key: &str) -> Result<&'a str, &'static str> {
     Ok(value)
 }
 
+/// A row in the recent-sends log names itself by its payment hash, prefixed
+/// so it can never collide with a real message id: LNemail's own ids and its
+/// payment hashes are separate namespaces, but nothing declares that in
+/// writing, and this is one byte string doing the declaring instead.
+const SENT_ID_PREFIX: &str = "send-";
+
+fn sent_hash(id: &str) -> Option<&str> {
+    id.strip_prefix(SENT_ID_PREFIX)
+}
+
 fn text<'a>(p: &'a Value, key: &str, required: bool, max: usize) -> Result<&'a str, &'static str> {
     match p.get(key) {
         Some(Value::String(s)) => {
@@ -125,8 +135,20 @@ pub async fn call(method: &str, p: &Value) -> Result<Value, &'static str> {
             http::get(&["account"], &bearer).await
         }
         "lnemail.list" => {
-            allowed(p, &["accountId"])?;
+            allowed(p, &["accountId", "query"])?;
             let bearer = token(p).await?;
+            if text(p, "query", false, 64)?.trim() == "sent" {
+                // LNemail keeps no sent archive, only a short status log of
+                // its own recent outgoing payments — never a body.
+                let answer = http::get(&["email", "sends", "recent"], &bearer).await?;
+                let entries = answer["sends"].as_array().ok_or("lnemail_invalid_response")?;
+                let messages: Vec<Value> = entries.iter().map(resource::sent_row).collect();
+                let ids: Vec<Value> = messages.iter().map(|m| m["id"].clone()).collect();
+                return Ok(json!({
+                    "ids": ids, "messages": messages, "threadIds": ids,
+                    "nextPageToken": "", "estimate": entries.len(),
+                }));
+            }
             let answer = http::get(&["emails"], &bearer).await?;
             let entries = answer["emails"].as_array().ok_or("lnemail_invalid_response")?;
             let messages: Vec<Value> = entries.iter().map(resource::list_row).collect();
@@ -140,12 +162,28 @@ pub async fn call(method: &str, p: &Value) -> Result<Value, &'static str> {
             allowed(p, &["accountId", "id"])?;
             let id = segment(p, "id")?;
             let bearer = token(p).await?;
+            if let Some(hash) = sent_hash(id) {
+                // No endpoint answers for one send by its hash; the recent
+                // list is all there is, so the matching row is pulled out of
+                // it — a small, capped list, not a per-item fetch.
+                let answer = http::get(&["email", "sends", "recent"], &bearer).await?;
+                let entries = answer["sends"].as_array().ok_or("lnemail_invalid_response")?;
+                let item = entries
+                    .iter()
+                    .find(|entry| entry["payment_hash"] == hash)
+                    .ok_or("lnemail_not_found")?;
+                return Ok(resource::sent_message(item));
+            }
             let answer = http::get(&["emails", id], &bearer).await?;
             Ok(resource::full_message(&answer))
         }
         "lnemail.attachment" => {
             allowed(p, &["accountId", "id", "attachmentId"])?;
             let id = segment(p, "id")?;
+            if sent_hash(id).is_some() {
+                // A sent row carries no attachments of its own to fetch.
+                return Err("lnemail_not_found");
+            }
             let index: usize = p["attachmentId"]
                 .as_str()
                 .and_then(|s| s.parse().ok())
@@ -157,6 +195,11 @@ pub async fn call(method: &str, p: &Value) -> Result<Value, &'static str> {
         "lnemail.delete" => {
             allowed(p, &["accountId", "id"])?;
             let id = segment(p, "id")?;
+            if sent_hash(id).is_some() {
+                // There is no endpoint to remove an entry from the send log;
+                // it is LNemail's own record of what it was paid to send.
+                return Err("lnemail_sent_log_readonly");
+            }
             let bearer = token(p).await?;
             http::delete(&["emails", id], None, &bearer).await
         }
@@ -168,7 +211,12 @@ pub async fn call(method: &str, p: &Value) -> Result<Value, &'static str> {
             }
             let mut checked = Vec::with_capacity(ids.len());
             for (index, _) in ids.iter().enumerate() {
-                checked.push(segment(&json!({"id": ids[index]}), "id")?.to_owned());
+                let wrapped = json!({"id": ids[index]});
+                let id = segment(&wrapped, "id")?;
+                if sent_hash(id).is_some() {
+                    return Err("lnemail_sent_log_readonly");
+                }
+                checked.push(id.to_owned());
             }
             let bearer = token(p).await?;
             let body = json!({"email_ids": checked});
