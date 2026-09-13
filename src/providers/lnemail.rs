@@ -10,6 +10,9 @@
 use super::lnemail_http as http;
 use serde_json::{Value, json};
 
+#[path = "lnemail_resource.rs"]
+mod resource;
+
 const MAX_TEXT: usize = 1024 * 1024;
 const MAX_SHORT: usize = 4096;
 const MAX_ATTACHMENT_TOTAL: usize = 8 * 1024 * 1024;
@@ -148,13 +151,32 @@ pub async fn call(method: &str, p: &Value) -> Result<Value, &'static str> {
         "lnemail.list" => {
             allowed(p, &["accountId"])?;
             let bearer = token(p).await?;
-            http::get(&["emails"], &bearer).await
+            let answer = http::get(&["emails"], &bearer).await?;
+            let entries = answer["emails"].as_array().ok_or("lnemail_invalid_response")?;
+            let messages: Vec<Value> = entries.iter().map(resource::list_row).collect();
+            let ids: Vec<Value> = messages.iter().map(|m| m["id"].clone()).collect();
+            Ok(json!({
+                "ids": ids, "messages": messages, "threadIds": ids,
+                "nextPageToken": "", "estimate": entries.len(),
+            }))
         }
         "lnemail.read" => {
             allowed(p, &["accountId", "id"])?;
             let id = segment(p, "id")?;
             let bearer = token(p).await?;
-            http::get(&["emails", id], &bearer).await
+            let answer = http::get(&["emails", id], &bearer).await?;
+            Ok(resource::full_message(&answer))
+        }
+        "lnemail.attachment" => {
+            allowed(p, &["accountId", "id", "attachmentId"])?;
+            let id = segment(p, "id")?;
+            let index: usize = p["attachmentId"]
+                .as_str()
+                .and_then(|s| s.parse().ok())
+                .ok_or("invalid_params")?;
+            let bearer = token(p).await?;
+            let answer = http::get(&["emails", id], &bearer).await?;
+            resource::attachment_data(&answer, index)
         }
         "lnemail.delete" => {
             allowed(p, &["accountId", "id"])?;

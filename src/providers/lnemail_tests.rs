@@ -87,6 +87,8 @@ async fn every_method_validates_its_params_before_any_credential_lookup() {
         ("lnemail.list", json!({"accountId":"not-an-account"})),
         ("lnemail.read", json!({"accountId":"not-an-account","id":"abc"})),
         ("lnemail.read", json!({"accountId":"lnemail:user@example.org","id":".."})),
+        ("lnemail.attachment", json!({"accountId":"not-an-account","id":"abc","attachmentId":"0"})),
+        ("lnemail.attachment", json!({"accountId":"lnemail:user@example.org","id":"abc","attachmentId":"not-a-number"})),
         ("lnemail.delete", json!({"accountId":"not-an-account","id":"abc"})),
         ("lnemail.deleteMany", json!({"accountId":"not-an-account","ids":["abc"]})),
         ("lnemail.deleteMany", json!({"accountId":"lnemail:user@example.org","ids":[]})),

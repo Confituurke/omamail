@@ -9,6 +9,7 @@
 .import "Imap.js" as Imap
 .import "Hey.js" as Hey
 .import "Jmap.js" as Jmap
+.import "Lnemail.js" as Lnemail
 
 function capabilities(values) {
   var raw = values || {}
@@ -69,7 +70,7 @@ function define(source) {
   }
 }
 
-var ALL = [define(Gmail), define(Hey), define(Outlook), define(Imap), define(Jmap)]
+var ALL = [define(Gmail), define(Hey), define(Outlook), define(Imap), define(Jmap), define(Lnemail)]
 
 var DEFAULT_ID = "gmail"
 

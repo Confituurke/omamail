@@ -182,6 +182,7 @@ pub const ALL: &[&str] = &[
     "lnemail.account",
     "lnemail.list",
     "lnemail.read",
+    "lnemail.attachment",
     "lnemail.delete",
     "lnemail.deleteMany",
     "lnemail.recentSends",
