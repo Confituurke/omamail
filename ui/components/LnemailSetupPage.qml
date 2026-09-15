@@ -280,6 +280,19 @@ Column {
   Row {
     spacing: Style.space(8)
 
+    // LNemail issues this token once, at signup, and never shows it again —
+    // it is the only credential the mailbox has, so losing it without a copy
+    // saved elsewhere means losing the mailbox. The keyring holds it for this
+    // install; this is what lets it travel to another one.
+    Button {
+      visible: root.signedIn
+      text: "Copy access token"
+      foreground: root.textColor
+      bordered: true
+      fontSize: Style.font.bodySmall
+      onClicked: if (root.service && root.auth) root.service.copyText(root.auth.token)
+    }
+
     Button {
       visible: root.signedIn
       text: "Sign out"
