@@ -47,6 +47,7 @@ fn key(params: &serde_json::Map<String, Value>) -> Result<CredentialKey, &'stati
         ),
         "imap-password" => ("imap", CredentialKind::ImapPassword),
         "jmap-secret" => ("jmap", CredentialKind::JmapSecret),
+        "lnemail-token" => ("lnemail", CredentialKind::LnemailToken),
         "calendar-password" => ("caldav", CredentialKind::CalendarPassword),
         _ => return Err("invalid_params"),
     };
@@ -246,6 +247,10 @@ mod tests {
             (
                 json!({"kind":"jmap-secret","accountId":"jmap:a@example.org"}),
                 "jmap",
+            ),
+            (
+                json!({"kind":"lnemail-token","accountId":"lnemail:a@example.org"}),
+                "lnemail",
             ),
             (
                 json!({"kind":"calendar-password","accountId":"source-id"}),
