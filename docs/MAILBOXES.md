@@ -70,6 +70,12 @@ server is set.
 
 The sent copy is filed by Omamail rather than left to the server: a message handed to SMTP submission lands nowhere on its own. It goes to the server's own Sent folder, named by the server rather than guessed, and arrives already marked read; a server that reports no Sent folder holds no copy, and the status row says so. One thing worth knowing: a Gmail account read over IMAP has Google file its own copy of anything sent through Gmail's SMTP, so those accounts hold two.
 
+**LNemail** needs no address and no password either: a mailbox paid for and read over the Lightning Network, reached through its own REST API rather than IMAP or JMAP. An existing account's access token pasted in is verified by asking LNemail who it belongs to, the same way a pasted IMAP password is verified by using it. Or create a mailbox right there on the setup page: LNemail names the address itself and prices a year of it at 1000 sats, paid from any Lightning wallet against the invoice the page shows — Omamail only ever displays that invoice and polls whether someone has paid it, never a wallet of its own. Sending costs about 100 sats a message; reading is free.
+
+What LNemail does not have, the panel does not offer: no labels, no archive, no star, no search, no conversations — a flat inbox with Unread beside it and nothing else to switch to but Sent. **Sent is honest rather than absent**: LNemail keeps no archive of what you sent, only a status log of the last ten payments — recipient, subject, whether each was paid and delivered — and opening one says exactly that rather than showing an empty reader or failing quietly. Deleting a message is final: there is no Trash to restore one from.
+
+An LNemail account runs out: the year it bought is a year, not a subscription, and the mailbox stops working once that runs out. A lightning-bolt icon in the header, before *Check mail*, names how long is left — for one LNemail mailbox on its own, or for every one connected when looking at every mailbox at once — turning to the same warning colour the rest of the window uses, inside 30 days of running out or once it has. It opens a renewal invoice the same way signing up does: paid out of band, only ever displayed and polled here.
+
 If you enabled the optional CLI link, first run
 `python3 scripts/backend-runtime.py disable-cli` from the plugin directory.
 Omarchy has no verified uninstall hook to remove that external link for you.
@@ -83,7 +89,7 @@ That removes the plugin and its private runtime. Account data, caches, drafts
 and keyring entries stay in place. Removing those is separate and up to you:
 
 ```bash
-secret-tool clear service omamail    # refresh tokens and JMAP and IMAP passwords
+secret-tool clear service omamail    # refresh tokens, the LNemail token, and JMAP and IMAP passwords
 hey auth logout                      # the HEY session, if you added one
 rm -rf ~/.config/omamail             # the OAuth client and account list
 rm -rf ~/.cache/omamail              # cached mail

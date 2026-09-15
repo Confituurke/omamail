@@ -52,7 +52,7 @@ make app-run
 
 ## Features
 
-- **Multiple mailboxes:** Gmail, Outlook, HEY, JMAP and IMAP/SMTP, including Fastmail, iCloud and self-hosted servers.
+- **Multiple mailboxes:** Gmail, Outlook, HEY, JMAP, IMAP/SMTP and LNemail, including Fastmail, iCloud, self-hosted servers and a mailbox paid for over the Lightning Network.
 - **Mail and calendar:** read, search, compose, manage attachments and respond to meeting invitations. Available actions depend on your provider.
 - **Keyboard navigation:** `j`/`k` to move, `r` to reply, `c` to compose, `/` to search and `?` for all shortcuts.
 - **AI assistance in Omarchy:** ask about selected messages and review suggested drafts using your Omarchy AI setup. See [AI assistance](docs/AGENT.md).
@@ -63,7 +63,7 @@ make app-run
 
 ## Add your mailbox
 
-Choose a provider in Settings. Gmail needs a Google OAuth client; Outlook needs a Microsoft app registration. HEY uses the official [HEY CLI](https://github.com/basecamp/hey-cli). JMAP and IMAP usually use an app password or API token.
+Choose a provider in Settings. Gmail needs a Google OAuth client; Outlook needs a Microsoft app registration. HEY uses the official [HEY CLI](https://github.com/basecamp/hey-cli). JMAP and IMAP usually use an app password or API token. LNemail needs neither an address nor a password: paste an existing token, or pay a Lightning invoice for a new mailbox right there on the setup page.
 
 See [mailbox setup](docs/MAILBOXES.md) for provider instructions and limitations, including Microsoft 365 and Proton Mail Bridge.
 
@@ -82,6 +82,6 @@ Press `?` in Omamail for the shortcut sheet, or see the [keyboard guide](docs/KE
 - [Backend installation, updates, release flow, and recovery](docs/BACKEND-RUNTIME.md)
 - [Contributing](CONTRIBUTING.md)
 
-Omamail is an independent project and is not affiliated with Google, Microsoft or 37signals. Gmail, Outlook and HEY belong to their respective trademark owners.
+Omamail is an independent project and is not affiliated with Google, Microsoft, 37signals or LNemail. Gmail, Outlook and HEY belong to their respective trademark owners.
 
 Licensed under the [MIT License](LICENSE).
