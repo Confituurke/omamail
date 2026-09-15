@@ -17,6 +17,7 @@ QML_FILES := ui/Service.qml ui/BarWidget.qml ui/App.qml ui/compose/RecoveryContr
 	ui/components/HeySetupPage.qml \
 	ui/components/LnemailSetupPage.qml \
 	ui/components/LnemailRenewalPopup.qml \
+	ui/components/LnemailRenewalButton.qml \
 	ui/components/ProviderPicker.qml \
 	ui/components/GmailIcon.qml \
 	ui/components/ProviderLogo.qml \

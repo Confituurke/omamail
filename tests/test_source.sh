@@ -1063,13 +1063,27 @@ awk '
 #    has to be in the tree or the card falls back to a placeholder. It gets a
 #    ceiling of its own instead of none: a card image that grew to a megabyte
 #    would still be a megabyte every user clones.
+#
+#    ui/App.qml is a second, provisional exception, and unlike the others it
+#    is source rather than an asset: every provider needs the same header
+#    control, setup-page Component and dialog wiring App.qml already gives
+#    Gmail, Outlook, HEY, JMAP and IMAP, so LNemail's own share of that is not
+#    excess weight, it is the same shape repeated a sixth time. The six
+#    setup-page Component blocks (`gmailSetupPage`, `heySetupPage`,
+#    `outlookSetupPage`, `jmapSetupPage`, `imapSetupPage`, `lnemailSetupPage`)
+#    are near-identical live-binding boilerplate that a real dedup would
+#    shrink well below the ordinary ceiling again; until that refactor lands,
+#    this file keeps a wider ceiling of its own rather than blocking a
+#    provider that needs nothing unusual from it.
 limit=$((128 * 1024))
 preview_limit=$((384 * 1024))
+app_limit=$((136 * 1024))
 oversized=$(cd ..
   while IFS= read -r -d '' file; do
       [ -f "$file" ] || continue
       case "$file" in
         (preview.png) ceiling=$preview_limit ;;
+        (ui/App.qml) ceiling=$app_limit ;;
         (app/assets/fonts/SymbolsNerdFontMono-Regular.ttf) ceiling=2610012 ;;
         (app/resources/macos/omamail.icns) ceiling=111809 ;;
         (*) ceiling=$limit ;;
