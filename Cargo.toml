@@ -32,6 +32,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 rustls-native-certs = "0.8"
 zeroize = "1"
+qrcode = { version = "0.14.1", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = { version = "3", features = ["OSX_10_15"] }

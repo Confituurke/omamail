@@ -104,6 +104,8 @@ async fn every_method_validates_its_params_before_any_credential_lookup() {
         ("lnemail.renewalInvoice", json!({"accountId":"lnemail:user@example.org","years":1.5})),
         ("lnemail.renewalStatus", json!({"accountId":"not-an-account","paymentHash":"abc"})),
         ("lnemail.renewalReissue", json!({"accountId":"not-an-account","paymentHash":"abc"})),
+        ("lnemail.qrCode", json!({"unexpected":true})),
+        ("lnemail.qrCode", json!({"text":""})),
         ("lnemail.unknown", json!({})),
     ] {
         assert!(
@@ -152,4 +154,14 @@ async fn a_sent_log_row_is_refused_deletion_before_any_network_call() {
         .await,
         Err("lnemail_not_found")
     );
+}
+
+#[tokio::test]
+async fn qr_code_needs_no_account_and_encodes_the_invoice_text_it_is_given() {
+    let result = call("lnemail.qrCode", &json!({"text": "lnbc1p0test"}))
+        .await
+        .unwrap();
+    let svg = result["svg"].as_str().unwrap();
+    assert!(svg.starts_with("<svg"));
+    assert!(svg.contains("<path d=\"M"));
 }

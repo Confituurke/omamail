@@ -204,6 +204,20 @@ Column {
       wrapMode: Text.WordWrap
     }
 
+    // Scanned with a phone's wallet rather than typed or copied by hand.
+    // Rendered by the backend from the same invoice text the field below
+    // carries, so the two can never disagree.
+    Image {
+      width: Math.min(parent.width, Style.space(200))
+      height: width
+      anchors.horizontalCenter: parent.horizontalCenter
+      visible: !!root.auth && root.auth.paymentQrSvg !== ""
+      fillMode: Image.PreserveAspectFit
+      source: root.auth && root.auth.paymentQrSvg !== ""
+        ? "data:image/svg+xml;utf8," + encodeURIComponent(root.auth.paymentQrSvg)
+        : ""
+    }
+
     TextField {
       objectName: "lnemail-invoice"
       width: parent.width

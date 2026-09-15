@@ -194,7 +194,8 @@
     "lnemail.sendInvoice",
     "lnemail.renewalInvoice",
     "lnemail.renewalStatus",
-    "lnemail.renewalReissue"
+    "lnemail.renewalReissue",
+    "lnemail.qrCode"
   ],
   "contractCases": [
     {
@@ -600,6 +601,16 @@
       }
     },
     {
+      "name": "lnemail QR code encodes arbitrary text",
+      "method": "lnemail.qrCode",
+      "params": {
+        "text": "hello"
+      },
+      "types": {
+        "svg": "string"
+      }
+    },
+    {
       "name": "both display modes",
       "method": "message.render",
       "params": {
@@ -731,10 +742,12 @@
       "lnemail.sendInvoice",
       "lnemail.renewalInvoice",
       "lnemail.renewalStatus",
-      "lnemail.renewalReissue"
+      "lnemail.renewalReissue",
+      "lnemail.qrCode"
     ],
     "cases": [
-      "provider rules snapshot includes LNemail"
+      "provider rules snapshot includes LNemail",
+      "lnemail QR code encodes arbitrary text"
     ]
   }
 }

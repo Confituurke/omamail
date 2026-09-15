@@ -13,6 +13,8 @@ use serde_json::{Value, json};
 
 #[path = "lnemail_resource.rs"]
 mod resource;
+#[path = "lnemail_qr.rs"]
+mod qr;
 
 const MAX_DELETE_BATCH: usize = 500;
 // The same decoded-message ceiling `imap.send` accepts, since this is the
@@ -297,6 +299,11 @@ pub async fn call(method: &str, p: &Value) -> Result<Value, &'static str> {
             let bearer = token(p).await?;
             let body = json!({"exclude_provider": optional(exclude)});
             http::post(&["account", "renew", hash, "new-invoice"], &body, &bearer).await
+        }
+        "lnemail.qrCode" => {
+            allowed(p, &["text"])?;
+            let value = text(p, "text", true, 4096)?;
+            Ok(json!({"svg": qr::svg(value)?}))
         }
         _ => Err("unknown_method"),
     }

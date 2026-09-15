@@ -63,6 +63,12 @@ Item {
   property int priceSats: 0
   property bool creatingAccount: false
 
+  // A QR rendering of `paymentRequest`, the same as the renewal invoice's own
+  // below: fetched alongside it so a wallet can scan rather than someone
+  // copying it by hand. Empty while in flight or if rendering failed — the
+  // invoice text is still there either way.
+  property string paymentQrSvg: ""
+
   // What `GET /account` last said about this mailbox's own expiry. LNemail
   // accounts run out — 1000 sats bought one year — and this is the only
   // place that answer is held; nothing here asks again on its own, since
@@ -83,6 +89,13 @@ Item {
   property int renewalYears: 1
   property bool renewing: false
   property string renewalError: ""
+
+  // A QR rendering of `renewalPaymentRequest`, fetched alongside it so a
+  // phone's wallet can scan the invoice rather than someone typing or
+  // copying a few hundred bech32 characters by hand. Empty while the
+  // rendering is in flight, or if the backend could not produce one — the
+  // text field it sits beside still carries the invoice either way.
+  property string renewalQrSvg: ""
 
   signal loginSucceeded()
   signal loggedOut()
@@ -263,6 +276,7 @@ Item {
     renewalPaymentRequest = ""
     renewalPaymentHash = ""
     renewalPriceSats = 0
+    renewalQrSvg = ""
     renewalYears = Math.max(1, Math.min(10, Math.round(Number(years) || 1)))
     backend.call("lnemail.renewalInvoice",
       { accountId: root.accountId, years: renewalYears },
@@ -285,7 +299,19 @@ Item {
         renewalPaymentHash = hash
         renewalPriceSats = Number(value.price_sats) || 0
         renewalPoll.running = true
+        fetchRenewalQr(invoice, hash)
       })
+  }
+
+  // Scanning is the whole point of a QR code, so a failure here is quiet:
+  // the invoice text beside it still carries everything a wallet needs, and
+  // this is retried from nothing but that same text.
+  function fetchRenewalQr(invoice, hash) {
+    if (!backend) return
+    backend.call("lnemail.qrCode", { text: invoice }, function(result, error) {
+      if (!root.renewing || root.renewalPaymentHash !== hash) return // superseded meanwhile
+      root.renewalQrSvg = !error && result ? String(result.svg || "") : ""
+    })
   }
 
   function cancelRenewal() {
@@ -293,6 +319,7 @@ Item {
     renewing = false
     renewalPaymentRequest = ""
     renewalPaymentHash = ""
+    renewalQrSvg = ""
     renewalPriceSats = 0
   }
 
@@ -311,6 +338,7 @@ Item {
           renewing = false
           renewalPaymentRequest = ""
           renewalPaymentHash = ""
+          renewalQrSvg = ""
           var extended = String(value.new_expires_at || "")
           if (extended !== "") expiresAt = extended
           isExpired = false
@@ -322,6 +350,7 @@ Item {
           renewing = false
           renewalPaymentRequest = ""
           renewalPaymentHash = ""
+          renewalQrSvg = ""
           renewalError = status === "expired"
             ? "That invoice expired before it was paid. Try renewing again"
             : "The renewal payment failed. Try renewing again"
@@ -357,6 +386,7 @@ Item {
     paymentRequest = ""
     paymentHash = ""
     priceSats = 0
+    paymentQrSvg = ""
     if (!backend) {
       creatingAccount = false
       lastError = "Mail backend unavailable"
@@ -381,6 +411,17 @@ Item {
       paymentHash = hash
       priceSats = Number(value.price_sats) || 0
       paymentPoll.running = true
+      fetchPaymentQr(invoice, hash)
+    })
+  }
+
+  // See `fetchRenewalQr` below: the same fetch-and-forget shape, keyed to
+  // the signup invoice's own hash instead of a renewal's.
+  function fetchPaymentQr(invoice, hash) {
+    if (!backend) return
+    backend.call("lnemail.qrCode", { text: invoice }, function(result, error) {
+      if (!root.creatingAccount || root.paymentHash !== hash) return // superseded meanwhile
+      root.paymentQrSvg = !error && result ? String(result.svg || "") : ""
     })
   }
 
@@ -390,6 +431,7 @@ Item {
     paymentRequest = ""
     paymentHash = ""
     priceSats = 0
+    paymentQrSvg = ""
   }
 
   function pollPayment() {
@@ -405,6 +447,7 @@ Item {
       if (status === "paid") {
         paymentPoll.running = false
         creatingAccount = false
+        paymentQrSvg = ""
         var learned = String(value.email_address || "")
         var granted = String(value.access_token || "")
         if (learned === "" || granted === "") {
@@ -418,6 +461,7 @@ Item {
         creatingAccount = false
         paymentRequest = ""
         paymentHash = ""
+        paymentQrSvg = ""
         lastError = status === "expired"
           ? "That invoice expired before it was paid. Create a new one"
           : "The payment failed. Create a new invoice"

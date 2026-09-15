@@ -148,6 +148,20 @@ Item {
               wrapMode: Text.WordWrap
             }
 
+            // Scanned with a phone's wallet rather than typed or copied by
+            // hand. Rendered by the backend from the same invoice text the
+            // field below carries, so the two can never disagree.
+            Image {
+              width: Math.min(parent.width, Style.space(200))
+              height: width
+              anchors.horizontalCenter: parent.horizontalCenter
+              visible: !!target.auth && target.auth.renewalQrSvg !== ""
+              fillMode: Image.PreserveAspectFit
+              source: target.auth && target.auth.renewalQrSvg !== ""
+                ? "data:image/svg+xml;utf8," + encodeURIComponent(target.auth.renewalQrSvg)
+                : ""
+            }
+
             TextField {
               width: parent.width
               readOnly: true
