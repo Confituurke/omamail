@@ -2,14 +2,12 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-import "Credentials.js" as Credentials
-import "Secrets.js" as Secrets
-
 // LNemail's own sign-in: either an existing account's access token pasted in,
 // or a brand new mailbox created here and paid for out of band. The token is
 // LNemail's only credential — it is never refreshed or rotated — so unlike an
-// OAuth manager this holds no session to renew, only the one secret
-// secret-tool keeps, exactly as ImapAuth and JmapAuth do for theirs.
+// OAuth manager this holds no session to renew, only the one secret the
+// typed backend credential RPC keeps, exactly as ImapAuth and JmapAuth do
+// for theirs.
 Item {
   id: root
 
@@ -19,6 +17,7 @@ Item {
 
   required property string pluginDir
   property var backend: null
+  property var platform: null
 
   property string accountId: ""
 
@@ -38,12 +37,18 @@ Item {
   // reads them without knowing which provider it has.
   readonly property bool credentialsPresent: configured
   property bool loginBusy: false
-  readonly property bool sessionBusy: secretLookup.running || keyringStore.running
+  property bool credentialLookupBusy: false
+  property bool credentialWriteBusy: false
+  property int credentialLookupSerial: 0
+  property string credentialWriteAccount: ""
+  property string pendingCredentialDelete: ""
+  readonly property bool sessionBusy: credentialLookupBusy || credentialWriteBusy
   property string lastError: ""
 
-  readonly property var requiredTools: ["secret-tool"]
+  // Native credential storage and network transport are backend capabilities.
+  readonly property var requiredTools: []
   property var missingTools: []
-  property bool toolsChecked: false
+  property bool toolsChecked: true
   readonly property bool toolsPresent: toolsChecked && missingTools.length === 0
 
   property var credentialWaiters: []
@@ -121,7 +126,7 @@ Item {
     var next = credentialWaiters.slice()
     next.push(callback)
     credentialWaiters = next
-    if (secretLookup.running) return
+    if (credentialLookupBusy) return
     startSecretLookup()
   }
 
@@ -130,24 +135,37 @@ Item {
       tokenChecked = true
       return
     }
-    if (secretLookup.running) return
+    if (credentialLookupBusy) return
     startSecretLookup()
   }
 
   function startSecretLookup() {
-    var attributes = Credentials.lnemailKeyringAttributes(accountId)
-    if (attributes.length === 0) {
-      handleSecretLookup("")
+    var boundAccount = accountId
+    if (!platform || typeof platform.credentialGet !== "function" || boundAccount === "") {
+      handleSecretLookup("", "credential_store_unavailable")
       return
     }
     lookupHandled = false
-    secretLookup.command = ["secret-tool", "lookup"].concat(attributes)
-    secretLookup.running = true
+    var serial = ++credentialLookupSerial
+    credentialLookupBusy = true
+    platform.credentialGet("lnemail-token", boundAccount, "", function(value, error) {
+      if (serial !== root.credentialLookupSerial) return
+      root.credentialLookupBusy = false
+      if (boundAccount !== root.accountId) return
+      root.handleSecretLookup(error ? "" : value, error)
+    })
   }
 
-  function handleSecretLookup(line) {
+  function handleSecretLookup(line, error) {
     if (lookupHandled) return
     lookupHandled = true
+    if (error && error !== "credential_missing") {
+      tokenChecked = false
+      lastError = "The credential store is unavailable"
+      finishWaiters("", lastError)
+      if (configured) sessionUnavailable(lastError)
+      return
+    }
     tokenChecked = true
     var value = String(line || "")
     if (value === "") {
@@ -168,6 +186,10 @@ Item {
   // on the next request.
   function signIn(pastedToken) {
     if (root.creatingAccount) return false
+    if (platform && platform.canAccessCredentials === false) {
+      lastError = "Install or update the mail backend before signing in"
+      return false
+    }
     var value = String(pastedToken || "").trim()
     if (value === "") {
       lastError = "Paste the access token from your LNemail account"
@@ -416,27 +438,45 @@ Item {
       unnamedToken = token
       return
     }
-    var attributes = Credentials.lnemailKeyringAttributes(accountId)
-    if (token === "") return
-    keyringWriteSecret = token
-    keyringStore.command = [pluginDir + "/scripts/keyring-store.sh"].concat(attributes)
-    keyringStore.running = true
+    if (!platform || typeof platform.credentialPut !== "function" || token === ""
+        || credentialWriteBusy) return
+    var boundAccount = accountId
+    var value = token
+    credentialWriteBusy = true
+    credentialWriteAccount = boundAccount
+    platform.credentialPut("lnemail-token", boundAccount, "", value, function(ok, error) {
+      value = ""
+      root.credentialWriteBusy = false
+      root.credentialWriteAccount = ""
+      var deleteAccount = root.pendingCredentialDelete
+      root.pendingCredentialDelete = ""
+      if (deleteAccount !== "") {
+        root.deleteCredential(deleteAccount)
+        return
+      }
+      if (boundAccount !== root.accountId) return
+      if (!ok) root.lastError = "Signed in, but the token could not be saved. "
+        + "You may need to enter it again after a restart"
+      else root.credentialsSaved()
+    })
   }
 
-  property string keyringWriteSecret: ""
+  function deleteCredential(boundAccount) {
+    if (platform && typeof platform.credentialDelete === "function" && boundAccount !== "")
+      platform.credentialDelete("lnemail-token", boundAccount, "", function() {})
+  }
 
   function logout() {
+    var boundAccount = accountId
     token = ""
     pendingToken = ""
     tokenChecked = true
     cancelRenewal()
     statusChecked = false
     statusError = ""
-    var attributes = Credentials.lnemailKeyringAttributes(accountId)
-    if (attributes.length > 0) {
-      keyringClear.command = ["secret-tool", "clear"].concat(attributes)
-      keyringClear.running = true
-    }
+    if (credentialWriteBusy && credentialWriteAccount === boundAccount)
+      pendingCredentialDelete = boundAccount
+    else deleteCredential(boundAccount)
     loggedOut()
   }
 
@@ -477,12 +517,6 @@ Item {
     }
   }
 
-  Component.onCompleted: {
-    toolProbe.command = ["sh", "-c",
-      "for tool in secret-tool; do command -v \"$tool\" >/dev/null 2>&1 || echo \"$tool\"; done"]
-    toolProbe.running = true
-  }
-
   Timer {
     id: paymentPoll
     interval: 3000
@@ -495,56 +529,5 @@ Item {
     interval: 3000
     repeat: true
     onTriggered: root.pollRenewal()
-  }
-
-  Process {
-    id: toolProbe
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var missing = String(text || "").split("\n")
-        var found = []
-        for (var i = 0; i < missing.length; i++) {
-          var name = missing[i].trim()
-          if (name) found.push(name)
-        }
-        root.missingTools = found
-        root.toolsChecked = true
-      }
-    }
-  }
-
-  Process {
-    id: secretLookup
-    stdout: StdioCollector { id: secretOutput; waitForEnd: true }
-    stderr: StdioCollector { waitForEnd: true }
-    onExited: function(exitCode) {
-      // One trailing newline is the pipe's; everything else is the secret.
-      var value = exitCode === 0 ? Secrets.fromKeyring(secretOutput.text) : ""
-      root.handleSecretLookup(value)
-    }
-  }
-
-  Process {
-    id: keyringStore
-    stdinEnabled: true
-    stdout: StdioCollector { waitForEnd: true }
-    stderr: StdioCollector { waitForEnd: true }
-    onStarted: {
-      write(root.keyringWriteSecret + "\n")
-      root.keyringWriteSecret = ""
-    }
-    onExited: function(exitCode) {
-      root.keyringWriteSecret = ""
-      if (exitCode !== 0)
-        root.lastError = "Signed in, but the token could not be saved. "
-          + "You may need to enter it again after a restart"
-    }
-  }
-
-  Process {
-    id: keyringClear
-    stdout: StdioCollector { waitForEnd: true }
-    stderr: StdioCollector { waitForEnd: true }
   }
 }

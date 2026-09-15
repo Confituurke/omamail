@@ -412,18 +412,6 @@ function jmapKeyringAttributes(accountId) {
     "account", id || UNNAMED_ACCOUNT]
 }
 
-// LNemail's own credential is the bearer token issued at account creation —
-// its only authentication, never refreshed or rotated. Its own kind for the
-// reason IMAP's and JMAP's have one: the same address could in principle be
-// added again under a different scheme, and this keeps the entries apart.
-var LNEMAIL_KEYRING_KIND = "lnemail-token"
-
-function lnemailKeyringAttributes(accountId) {
-  var id = accountKey(accountId)
-  return ["service", KEYRING_SERVICE, "kind", LNEMAIL_KEYRING_KIND,
-    "account", id || UNNAMED_ACCOUNT]
-}
-
 // An Outlook refresh token belongs to both the public OAuth client and the
 // mailbox that granted it. Keeping a separate kind prevents a Hotmail address
 // also added through Gmail or generic IMAP from sharing a secret by accident.

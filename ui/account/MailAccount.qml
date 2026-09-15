@@ -2717,6 +2717,7 @@ Item {
 
     LnemailAuth {
       backend: root.backend
+      platform: root.platform
       pluginDir: root.pluginDir
       accountId: root.accountId
       // Learned once at sign-in and written back onto the entry the same way
