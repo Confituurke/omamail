@@ -49,7 +49,8 @@
       "unifiedCalendarView": false,
       "openOnClick": "Window",
       "showBarIcon": true,
-      "suggestEvents": false
+      "suggestEvents": false,
+      "lnemailCacheSentLocally": false
     },
     "schema": [
       {
@@ -152,6 +153,13 @@
         "label": "Unified calendar view",
         "defaultValue": false,
         "description": "Show calendars from every connected account instead of following the current mailbox."
+      },
+      {
+        "key": "lnemailCacheSentLocally",
+        "type": "boolean",
+        "label": "Remember LNemail mail sent through here",
+        "defaultValue": false,
+        "description": "LNemail itself keeps no copy of what you send — only a status log. On, a message you send from here is also kept encrypted on this device, under that mailbox's own access token, so opening it later shows what you wrote instead of just that it sent. Mail sent from LNemail's own site, or under a token since rotated, still shows only what LNemail remembers."
       },
       {
         "key": "openOnClick",

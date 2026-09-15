@@ -277,6 +277,61 @@ Column {
     }
   }
 
+  // Off by default. LNemail itself keeps no copy of what you send — only a
+  // status log — so this is the one place a sent body is ever kept for this
+  // mailbox, encrypted under its own access token: a mailbox sent from
+  // LNemail's own site, or opened here after that token has been rotated,
+  // still shows only what LNemail remembers.
+  Rectangle {
+    width: parent.width
+    visible: root.signedIn
+    implicitHeight: Math.max(cacheSentText.implicitHeight, cacheSentSwitch.implicitHeight)
+      + Style.space(16)
+    radius: Style.cornerRadius
+    color: Style.normalFillFor(root.textColor, root.accentColor)
+
+    Column {
+      id: cacheSentText
+      anchors.left: parent.left
+      anchors.leftMargin: Style.space(12)
+      anchors.right: cacheSentSwitch.left
+      anchors.rightMargin: Style.space(10)
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: Style.space(2)
+
+      Text {
+        width: parent.width
+        text: "Remember mail sent through here"
+        color: root.textColor
+        font.family: root.panelFontFamily
+        font.pixelSize: Style.font.bodySmall
+      }
+
+      Text {
+        width: parent.width
+        text: "Keeps an encrypted copy on this device so a sent message can be read back, not just seen as sent"
+        color: root.dimColor
+        font.family: root.panelFontFamily
+        font.pixelSize: Style.font.caption
+        wrapMode: Text.WordWrap
+        textFormat: Text.PlainText
+      }
+    }
+
+    ToggleSwitch {
+      id: cacheSentSwitch
+      objectName: "lnemail-cache-sent-switch"
+      anchors.right: parent.right
+      anchors.rightMargin: Style.space(10)
+      anchors.verticalCenter: parent.verticalCenter
+      checked: !!root.service && root.service.lnemailCacheSentLocally === true
+      foreground: root.textColor
+      accent: root.accentColor
+      onToggled: if (root.service)
+        root.service.setLnemailCacheSentLocally(!root.service.lnemailCacheSentLocally)
+    }
+  }
+
   Row {
     spacing: Style.space(8)
 

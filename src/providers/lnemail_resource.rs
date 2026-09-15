@@ -150,6 +150,23 @@ pub fn sent_message(entry: &Value) -> Value {
     row
 }
 
+/// A send row opened as a message, its body recovered from this device's own
+/// encrypted local cache rather than shown as the dummy `sent_message` above
+/// gives — because this device is the one that sent it and chose to remember
+/// it. Everything else about the row, including its date and ordering, still
+/// comes from `entry`, LNemail's own record: the cache only ever supplies a
+/// body, never anything a listing sorts or matches by.
+pub fn sent_message_from_cache(entry: &Value, cached: &Value) -> Value {
+    let mut row = sent_row(entry);
+    let body = format!(
+        "Kept on this device only — LNemail itself still keeps no copy.\n\n{}",
+        text(&cached["body"])
+    );
+    row["payload"]["body"] = json!({"size": body.len(), "data": URL_SAFE_NO_PAD.encode(&body)});
+    row["snippet"] = json!("");
+    row
+}
+
 fn attachment_bytes(item: &Value) -> Vec<u8> {
     let content = text(&item["content"]);
     if text(&item["encoding"]) == "base64" {

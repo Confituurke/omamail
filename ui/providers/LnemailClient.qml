@@ -227,6 +227,12 @@ Item {
   }
 
   function sendMessage(payload, callback) {
-    return call("lnemail.send", { raw: String((payload && payload.raw) || "") }, callback, newHandle())
+    // Off unless Settings says otherwise: LNemail keeps no sent archive of
+    // its own, and remembering one here — even encrypted, even locally — is
+    // this mailbox owner's call to make, not this client's to assume.
+    var cacheSent = !!auth && !!auth.platform && auth.platform.lnemailCacheSentLocally === true
+    return call("lnemail.send",
+      { raw: String((payload && payload.raw) || ""), cacheSent: cacheSent },
+      callback, newHandle())
   }
 }

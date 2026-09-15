@@ -21,6 +21,16 @@ webpki-roots = "1"
 hickory-resolver = "0.25"
 rusqlite = { version = "0.38", features = ["bundled"] }
 sha2 = "0.10"
+aes = "0.9.3"
+cbc = { version = "0.2.1", features = ["alloc"] }
+hkdf = "0.13.0"
+hmac = "0.13.0"
+# hmac/hkdf 0.13 want digest 0.11; the crate's own `sha2 = "0.10"` above is on
+# digest 0.10 for its existing callers, so this is the same sha2 already
+# resolved transitively (secret-service's own dependency chain), taken under
+# its own name rather than bumping the shared one for unrelated call sites.
+sha2-hkdf = { package = "sha2", version = "0.11.0" }
+getrandom = "0.2.17"
 unicode-normalization = "0.1"
 futures-util = "0.3"
 libc = "0.2"

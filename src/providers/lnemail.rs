@@ -15,6 +15,8 @@ use serde_json::{Value, json};
 mod resource;
 #[path = "lnemail_qr.rs"]
 mod qr;
+#[path = "lnemail_sent_cache.rs"]
+mod sent_cache;
 
 const MAX_DELETE_BATCH: usize = 500;
 // The same decoded-message ceiling `imap.send` accepts, since this is the
@@ -185,6 +187,15 @@ pub async fn call(method: &str, p: &Value) -> Result<Value, &'static str> {
                     .iter()
                     .find(|entry| entry["payment_hash"] == hash)
                     .ok_or("lnemail_not_found")?;
+                // A body sent through this app and remembered locally reads
+                // back as itself; anything else — sent from LNemail's own
+                // site, sent before this was on, or cached under a token
+                // since rotated — reads back as the same honest dummy it
+                // always has.
+                let account = p.get("accountId").and_then(Value::as_str).unwrap_or("");
+                if let Some(cached) = sent_cache::recall(account, hash, &bearer) {
+                    return Ok(resource::sent_message_from_cache(item, &cached));
+                }
                 return Ok(resource::sent_message(item));
             }
             let answer = http::get(&["emails", id], &bearer).await?;
@@ -246,15 +257,30 @@ pub async fn call(method: &str, p: &Value) -> Result<Value, &'static str> {
             // Gmail's send endpoint takes and IMAP puts on the wire
             // unchanged. LNemail's own endpoint wants none of that, so it is
             // taken apart into the fields the endpoint has.
-            allowed(p, &["accountId", "raw"])?;
+            allowed(p, &["accountId", "raw", "cacheSent"])?;
             let encoded = text(p, "raw", true, MAX_RAW_MESSAGE_ENCODED)?;
             let bytes = URL_SAFE_NO_PAD.decode(encoded).map_err(|_| "invalid_params")?;
             if bytes.len() > MAX_RAW_MESSAGE_DECODED {
                 return Err("invalid_params");
             }
             let fields = resource::decode_outgoing(&bytes)?;
+            let cache_sent = boolean(p, "cacheSent")?;
+            let account = p.get("accountId").and_then(Value::as_str).unwrap_or("").to_owned();
             let bearer = token(p).await?;
-            http::post(&["email", "send"], &fields, &bearer).await
+            let answer = http::post(&["email", "send"], &fields, &bearer).await?;
+            // Off unless the caller asks: this is the one place a plaintext
+            // body ever touches disk for LNemail, so it happens only when
+            // the setting that owns that tradeoff said yes. A failure here
+            // must never turn a message that sent into one that failed.
+            if cache_sent
+                && let Some(hash) = answer.get("payment_hash").and_then(Value::as_str)
+            {
+                let plaintext = json!({
+                    "to": fields["recipient"], "subject": fields["subject"], "body": fields["body"],
+                });
+                let _ = sent_cache::remember(&account, hash, &bearer, &plaintext);
+            }
+            Ok(answer)
         }
         "lnemail.sendStatus" => {
             allowed(p, &["accountId", "paymentHash"])?;

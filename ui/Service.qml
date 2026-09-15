@@ -137,7 +137,8 @@ Item {
     unifiedCalendarView: false,
     showBarIcon: true,
     unifiedMailboxes: false,
-    suggestEvents: false
+    suggestEvents: false,
+    lnemailCacheSentLocally: false
   })
   function normalizedSettings(values) {
     var next = ({})
@@ -353,6 +354,12 @@ Item {
     && settings.unifiedCalendarView === true
   readonly property bool unifiedMailboxes: !!settings
     && settings.unifiedMailboxes === true
+  // Off by default: LNemail keeps no copy of what you send, only a status
+  // log, so this is the one place a plaintext body is ever kept for it — on
+  // this device only, under that mailbox's own access token. See
+  // LnemailSetupPage.qml and providers::lnemail_sent_cache.
+  readonly property bool lnemailCacheSentLocally: !!settings
+    && settings.lnemailCacheSentLocally === true
 
   // Whether the bar draws an envelope for this.
   //
@@ -606,6 +613,10 @@ Item {
 
   function setUnifiedCalendarView(value) {
     persistSetting("unifiedCalendarView", value === true)
+  }
+
+  function setLnemailCacheSentLocally(value) {
+    persistSetting("lnemailCacheSentLocally", value === true)
   }
 
   // The default agent's command line, from Settings. Empty is no agent.
